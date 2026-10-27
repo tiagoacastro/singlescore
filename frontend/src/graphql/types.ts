@@ -34,13 +34,16 @@ export interface ModelPrediction {
   modelVersion: string;
   forecastAt: string;
   matchMinute?: number | null;
-  homeScoreAtForecast?: number;
-  awayScoreAtForecast?: number;
+  homeScoreAtForecast: number;
+  awayScoreAtForecast: number;
   pHome: number;
   pDraw: number;
   pAway: number;
   provenance: Provenance;
 }
+
+// The fields list / detail queries select for Match.preMatchPrediction.
+export type PreMatchPrediction = Pick<ModelPrediction, 'id' | 'pHome' | 'pDraw' | 'pAway' | 'forecastAt'>;
 
 export interface BenchmarkPrediction {
   id: string;
@@ -52,7 +55,7 @@ export interface BenchmarkPrediction {
   pHome: number;
   pDraw: number;
   pAway: number;
-  provenance: Provenance;
+  provenance?: Provenance;
 }
 
 export interface MatchEvent {
@@ -62,7 +65,6 @@ export interface MatchEvent {
   minute?: number | null;
   addedMinute?: number | null;
   description?: string | null;
-  eventTime: string;
 }
 
 export interface MatchCommentary {
@@ -92,7 +94,7 @@ export interface Match {
   commentary?: MatchCommentary[];
   modelPredictions?: ModelPrediction[];
   benchmarkPredictions?: BenchmarkPrediction[];
-  preMatchPrediction?: ModelPrediction | null;
+  preMatchPrediction?: PreMatchPrediction | null;
   stats?: MatchStats | null;
 }
 

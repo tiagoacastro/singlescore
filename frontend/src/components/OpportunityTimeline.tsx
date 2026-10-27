@@ -13,7 +13,6 @@ type Props = {
 const KIND_SPEC: Record<string, { label: string; color: string; radius: number }> = {
   GOAL: { label: 'Goal', color: '#38d996', radius: 7 },
   OWN_GOAL: { label: 'Own goal', color: '#ff7fa3', radius: 7 },
-  PENALTY: { label: 'Penalty', color: '#38d996', radius: 7 },
   PENALTY_MISSED: { label: 'Pen. missed', color: '#ef4a56', radius: 6 },
   PENALTY_SAVED: { label: 'Pen. saved', color: '#f2c94c', radius: 6 },
   ATTEMPT_SAVED: { label: 'Shot (saved)', color: '#7fb5ff', radius: 4.5 },
@@ -23,8 +22,8 @@ const KIND_SPEC: Record<string, { label: string; color: string; radius: number }
 
 const ATTEMPT_KINDS = new Set(Object.keys(KIND_SPEC));
 
-// Minute window: regulation + 10 min of stoppage covers 99% of PL
-// matches. Anything past that is clamped so a 90'+5 ends up at the
+// Minute window: regulation + 10 min of stoppage covers nearly every
+// match. Anything past that is clamped so a late 90'+12 ends up at the
 // right edge rather than falling off the chart.
 const X_MIN = 0;
 const X_MAX = 100;
@@ -33,10 +32,14 @@ const HEIGHT = 170;
 const PAD_X = 96;
 const PAD_Y = 30;
 
+// X position: second-half stoppage extends past 90 (90'+5 -> 95), but
+// first-half stoppage stays on the 45 line so it can't be drawn after
+// half-time.
 function effectiveMinute(c: MatchCommentary): number {
   const m = c.minute ?? 0;
-  const a = c.addedMinute ?? 0;
-  return Math.min(X_MAX, Math.max(X_MIN, m + a));
+  const firstHalf = c.period === 1 || (c.period == null && m <= 45);
+  const x = firstHalf ? Math.min(m, 45) : m + (c.addedMinute ?? 0);
+  return Math.min(X_MAX, Math.max(X_MIN, x));
 }
 
 // OpportunityTimeline renders a dot plot of every scoring attempt
@@ -65,7 +68,7 @@ export function OpportunityTimeline({ match }: Props) {
   const neutralShots = attempts.filter(
     (a) => a.teamSide !== 'HOME' && a.teamSide !== 'AWAY',
   );
-  const isGoal = (kind: string) => kind === 'GOAL' || kind === 'OWN_GOAL' || kind === 'PENALTY';
+  const isGoal = (kind: string) => kind === 'GOAL' || kind === 'OWN_GOAL';
   const homeGoals = homeShots.filter((a) => isGoal(a.kind));
   const awayGoals = awayShots.filter((a) => isGoal(a.kind));
 
@@ -99,6 +102,8 @@ export function OpportunityTimeline({ match }: Props) {
           viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
           preserveAspectRatio="xMidYMid meet"
           style={{ display: 'block', minWidth: 640 }}
+          role="img"
+          aria-label={`Shots by minute: ${match.homeTeam.name} ${homeShots.length}, ${match.awayTeam.name} ${awayShots.length}`}
         >
           {/* Baseline */}
           <line

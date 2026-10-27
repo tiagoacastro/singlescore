@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { Match, MatchCommentary } from '@/graphql/types';
+import { formatMinute } from '@/lib/format';
 
 type Props = {
   match: Pick<Match, 'commentary' | 'homeTeam' | 'awayTeam'>;
@@ -12,8 +13,8 @@ type TimedCommentary = MatchCommentary & { minute: number };
 // Grouping used by the filter-chip row. "ALL" is the implicit default.
 // Each group collects one or more kinds from the raw ESPN
 // classification; e.g. "Goals" includes both GOAL and OWN_GOAL,
-// "Chances" includes every ATTEMPT_* kind so the user can scrub
-// through all the quality-of-chance moments at a glance.
+// "Chances" includes every ATTEMPT_* kind plus missed / saved penalties
+// so the user can scrub through every chance at a glance.
 const FILTER_GROUPS: ReadonlyArray<{
   id: string;
   label: string;
@@ -23,13 +24,19 @@ const FILTER_GROUPS: ReadonlyArray<{
   {
     id: 'GOALS',
     label: 'Goals',
-    kinds: new Set(['GOAL', 'OWN_GOAL', 'PENALTY', 'PENALTY_MISSED', 'PENALTY_SAVED']),
+    kinds: new Set(['GOAL', 'OWN_GOAL']),
     color: '#38d996',
   },
   {
     id: 'CHANCES',
     label: 'Chances',
-    kinds: new Set(['ATTEMPT_SAVED', 'ATTEMPT_BLOCKED', 'ATTEMPT_MISSED']),
+    kinds: new Set([
+      'ATTEMPT_SAVED',
+      'ATTEMPT_BLOCKED',
+      'ATTEMPT_MISSED',
+      'PENALTY_MISSED',
+      'PENALTY_SAVED',
+    ]),
     color: '#7fb5ff',
   },
   {
@@ -54,7 +61,6 @@ const FILTER_GROUPS: ReadonlyArray<{
 const KIND_COLOR: Record<string, string> = {
   GOAL: '#38d996',
   OWN_GOAL: '#ff7fa3',
-  PENALTY: '#38d996',
   PENALTY_MISSED: '#ef4a56',
   PENALTY_SAVED: '#f2c94c',
   ATTEMPT_SAVED: '#7fb5ff',
@@ -85,7 +91,6 @@ function colorFor(kind: string): string {
 const KIND_LABEL: Record<string, string> = {
   GOAL: 'Goal',
   OWN_GOAL: 'Own goal',
-  PENALTY: 'Penalty',
   PENALTY_MISSED: 'Pen. miss',
   PENALTY_SAVED: 'Pen. save',
   ATTEMPT_SAVED: 'Shot saved',
@@ -110,10 +115,6 @@ function labelFor(kind: string): string {
   // Fallback: GOAL_SOMETHING_WEIRD -> "Goal something weird"
   const spaced = kind.replace(/_/g, ' ').toLowerCase();
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
-}
-
-function minuteLabel(row: TimedCommentary): string {
-  return row.addedMinute ? `${row.minute}'+${row.addedMinute}` : `${row.minute}'`;
 }
 
 // Reverse-chronological ordering helps a reader scan the latest
@@ -226,7 +227,6 @@ export function MatchCommentaryPanel({ match }: Props) {
           const isSignificant =
             row.kind === 'GOAL' ||
             row.kind === 'OWN_GOAL' ||
-            row.kind === 'PENALTY' ||
             row.kind === 'RED_CARD';
           return (
             <li
@@ -250,7 +250,7 @@ export function MatchCommentaryPanel({ match }: Props) {
                   fontWeight: isSignificant ? 600 : 400,
                 }}
               >
-                {minuteLabel(row)}
+                {formatMinute(row.minute, row.addedMinute)}
               </span>
               <span
                 style={{
@@ -307,6 +307,7 @@ function FilterChip({
   return (
     <button
       type="button"
+      aria-pressed={active}
       onClick={onClick}
       style={{
         border: `1px solid ${active ? color : '#2a3245'}`,

@@ -13,10 +13,9 @@ import {
 import { MODEL_EVALUATION_QUERY } from '@/graphql/queries';
 import type { EvaluationReport } from '@/graphql/types';
 import { EmptyState } from '@/components/EmptyState';
+import { formatPct } from '@/lib/format';
 
-function pct(x: number) {
-  return `${(x * 100).toFixed(1)}%`;
-}
+const pct = (x: number) => formatPct(x, 1);
 
 export function EvaluationPage() {
   const { data, loading, error } = useQuery<{ modelEvaluation: EvaluationReport }>(
@@ -118,7 +117,7 @@ export function EvaluationPage() {
         ) : (
           <EmptyState
             title="No evaluated predictions yet"
-            description="Seed demo matches with final results to compute calibration bins."
+            description="Calibration needs finished matches with a pre-match prediction."
           />
         )}
       </section>
@@ -130,10 +129,10 @@ export function EvaluationPage() {
             <span className="card__subtitle">bucketed</span>
           </div>
           {report?.byMinuteBucket?.length ? (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <table className="data-table">
               <thead>
-                <tr style={{ color: '#6c7891', fontSize: 12, textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                  <th style={{ padding: '8px 10px' }}>Bucket</th>
+                <tr>
+                  <th>Bucket</th>
                   <th>Brier</th>
                   <th>Log loss</th>
                   <th>n</th>
@@ -141,8 +140,8 @@ export function EvaluationPage() {
               </thead>
               <tbody>
                 {report.byMinuteBucket.map((b) => (
-                  <tr key={b.minuteBucket} style={{ borderTop: '1px solid #1f2735', fontFeatureSettings: '"tnum"' }}>
-                    <td style={{ padding: '8px 10px' }}>{b.minuteBucket}</td>
+                  <tr key={b.minuteBucket}>
+                    <td>{b.minuteBucket}</td>
                     <td>{b.brierScore.toFixed(3)}</td>
                     <td>{b.logLoss.toFixed(3)}</td>
                     <td>{b.sampleSize}</td>
@@ -163,10 +162,10 @@ export function EvaluationPage() {
             </span>
           </div>
           {report?.benchmarks?.length ? (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <table className="data-table">
               <thead>
-                <tr style={{ color: '#6c7891', fontSize: 12, textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                  <th style={{ padding: '8px 10px' }}>Provider</th>
+                <tr>
+                  <th>Provider</th>
                   <th>Horizon</th>
                   <th>Brier</th>
                   <th>Log loss</th>
@@ -176,8 +175,8 @@ export function EvaluationPage() {
               </thead>
               <tbody>
                 {report.benchmarks.map((b) => (
-                  <tr key={`${b.provider}-${b.horizon}`} style={{ borderTop: '1px solid #1f2735', fontFeatureSettings: '"tnum"' }}>
-                    <td style={{ padding: '8px 10px' }}><strong>{b.provider}</strong></td>
+                  <tr key={`${b.provider}-${b.horizon}`}>
+                    <td><strong>{b.provider}</strong></td>
                     <td>{b.horizon}</td>
                     <td>{b.brierScore.toFixed(3)}</td>
                     <td>{b.logLoss.toFixed(3)}</td>

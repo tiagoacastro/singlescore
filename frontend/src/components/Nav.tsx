@@ -15,7 +15,6 @@ const SYSTEM_STATUS_QUERY = gql`
 
 export function Nav() {
   const { data } = useQuery<{ health: Health }>(SYSTEM_STATUS_QUERY, {
-    fetchPolicy: 'cache-and-network',
     errorPolicy: 'all',
   });
   const health = data?.health;

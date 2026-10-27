@@ -7,12 +7,6 @@
   box-shadow: $shadow-sm;
 }
 
-@mixin card-raised {
-  @include card;
-  box-shadow: $shadow-md;
-  background: $color-bg-raised;
-}
-
 @mixin focus-ring {
   outline: none;
   box-shadow: 0 0 0 2px $color-bg-base, 0 0 0 4px rgba($color-accent, 0.55);

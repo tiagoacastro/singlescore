@@ -7,7 +7,6 @@ export const DASHBOARD_QUERY = gql`
         id
         kickoffAt
         status
-        finalResult
         homeScore
         awayScore
         provenance
@@ -93,15 +92,13 @@ export const MATCH_DETAIL_QUERY = gql`
       id
       kickoffAt
       status
-      minute
       homeScore
       awayScore
-      finalResult
       provenance
       venue
-      competition { id name country season }
-      homeTeam { id name shortName eloRating }
-      awayTeam { id name shortName eloRating }
+      competition { id name country }
+      homeTeam { id name shortName }
+      awayTeam { id name shortName }
       events {
         id
         eventType
@@ -109,7 +106,6 @@ export const MATCH_DETAIL_QUERY = gql`
         minute
         addedMinute
         description
-        eventTime
       }
       commentary {
         sequence
@@ -131,7 +127,6 @@ export const MATCH_DETAIL_QUERY = gql`
         pHome
         pDraw
         pAway
-        provenance
       }
       preMatchPrediction { id pHome pDraw pAway forecastAt }
       benchmarkPredictions {

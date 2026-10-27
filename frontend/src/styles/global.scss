@@ -71,6 +71,7 @@
     font-weight: $fw-medium;
     &:hover { color: $color-text-primary; background: $color-bg-hover; }
     &.is-active { color: $color-text-primary; background: $color-bg-surface; }
+    &:focus-visible { @include focus-ring; }
   }
 
   &__spacer { flex: 1; }
@@ -88,10 +89,11 @@
 .chip {
   @include pill($color-bg-hover, $color-text-secondary);
 
+  &:focus-visible { @include focus-ring; }
+
   &--demo    { @include pill(rgba($color-accent, 0.15), $color-accent); }
   &--replay  { @include pill(rgba($color-warning, 0.15), $color-warning); }
   &--historical { @include pill(rgba($color-text-muted, 0.2), $color-text-secondary); }
-  &--danger  { @include pill(rgba($color-danger, 0.15), $color-danger); }
 }
 
 // Card layouts
@@ -118,6 +120,81 @@
       text-transform: uppercase;
       letter-spacing: 0.08em;
     }
+  }
+}
+
+// Plain data tables (benchmarks, evaluation breakdowns).
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-feature-settings: 'tnum';
+
+  th {
+    padding: $space-2 10px;
+    font-size: $fs-xs;
+    font-weight: $fw-medium;
+    text-align: left;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: $color-text-muted;
+  }
+  td {
+    padding: $space-2 10px;
+    border-top: 1px solid $color-border;
+  }
+  .muted { color: $color-text-muted; font-size: $fs-xs; }
+  .prob-home { color: $color-success; }
+  .prob-away { color: #ff7fa3; }
+}
+
+// Note under a card header (caveats, data provenance).
+.card__note {
+  margin: 0 0 $space-3;
+  font-size: $fs-xs;
+  line-height: 1.4;
+  color: $color-text-secondary;
+}
+
+// Event timeline rows. The per-kind colour comes in as --kind.
+.event-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.event-row {
+  display: grid;
+  grid-template-columns: 58px 24px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: $space-2 10px;
+  border-radius: $radius-md;
+  background: $color-bg-raised;
+  border-left: 3px solid var(--kind);
+
+  &__minute {
+    font-size: $fs-sm;
+    color: $color-text-secondary;
+    font-feature-settings: 'tnum';
+  }
+  &__icon { font-size: 16px; text-align: center; }
+  &__text {
+    font-size: 14px;
+    strong { color: var(--kind); }
+    span { color: #c4ccd9; }
+  }
+  &__side {
+    font-size: 11px;
+    color: $color-text-muted;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  &--approx {
+    border-left-style: dashed;
+    .event-row__minute { color: $color-text-muted; font-style: italic; }
   }
 }
 
@@ -211,12 +288,6 @@
   display: flex;
   flex-direction: column;
   gap: $space-1;
-  &__label {
-    font-size: $fs-xs;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: $color-text-muted;
-  }
   &__value {
     font-size: $fs-2xl;
     font-weight: $fw-semibold;

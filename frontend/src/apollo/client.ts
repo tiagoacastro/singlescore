@@ -59,7 +59,9 @@ export const apolloClient = new ApolloClient({
     },
   }),
   defaultOptions: {
-    watchQuery: { fetchPolicy: 'cache-and-network', errorPolicy: 'all' },
+    // Data only changes when the hourly notebooks run, so cached
+    // results are reused while navigating.
+    watchQuery: { fetchPolicy: 'cache-first', errorPolicy: 'all' },
     query: { fetchPolicy: 'network-only', errorPolicy: 'all' },
   },
 });

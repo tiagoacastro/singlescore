@@ -2,10 +2,9 @@ import { defineConfig, devices } from '@playwright/test';
 
 // SingleScore end-to-end tests.
 //
-// These tests run against a locally-running backend + frontend. The
-// `webServer` block starts the frontend (webpack-dev-server), which in
-// turn proxies /graphql to the backend. The backend must already be
-// running (see README: "Running the stack").
+// These tests run against an already-running backend and webpack dev
+// server (which proxies /graphql to the backend); see README "Running
+// the stack locally".
 export default defineConfig({
   testDir: './e2e',
   timeout: 30_000,

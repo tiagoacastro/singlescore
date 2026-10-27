@@ -3,11 +3,7 @@ import { DASHBOARD_QUERY } from '@/graphql/queries';
 import type { Dashboard } from '@/graphql/types';
 import { EmptyState } from '@/components/EmptyState';
 import { MatchRow } from '@/components/MatchRow';
-
-function fmtNumber(n: number | undefined | null, digits = 3) {
-  if (n === undefined || n === null || Number.isNaN(n)) return '—';
-  return n.toFixed(digits);
-}
+import { formatNumber, formatPct } from '@/lib/format';
 
 function fmtRelative(iso: string | null | undefined): string {
   if (!iso) return 'never';
@@ -50,7 +46,7 @@ export function DashboardPage() {
           </div>
           <div className="metric">
             <span className="metric__value">
-              {fmtNumber(dash?.modelMetrics?.brierScore)}
+              {formatNumber(dash?.modelMetrics?.brierScore)}
             </span>
             <span className="metric__meta">
               n = {dash?.modelMetrics?.sampleSize ?? 0}
@@ -67,10 +63,10 @@ export function DashboardPage() {
           </div>
           <div className="metric">
             <span className="metric__value">
-              {fmtNumber(dash?.modelMetrics?.logLoss)}
+              {formatNumber(dash?.modelMetrics?.logLoss)}
             </span>
             <span className="metric__meta">
-              accuracy {dash?.modelMetrics ? Math.round(dash.modelMetrics.accuracy * 100) + '%' : '—'}
+              accuracy {dash?.modelMetrics ? formatPct(dash.modelMetrics.accuracy) : '—'}
             </span>
           </div>
         </div>

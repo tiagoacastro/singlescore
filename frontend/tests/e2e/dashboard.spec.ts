@@ -42,6 +42,9 @@ test.describe('Dashboard', () => {
 
     // Probability timeline chart renders at least one data point.
     await expect(page.locator('.chart-wrap svg').first()).toBeVisible({ timeout: 15_000 });
+
+    // Event timeline rows carry real match minutes (e.g. 17' or 45'+3).
+    await expect(page.locator('.event-row__minute').first()).toHaveText(/^~?\d+'/);
   });
 });
 

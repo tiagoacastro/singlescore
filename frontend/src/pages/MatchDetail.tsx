@@ -18,6 +18,7 @@ export function MatchDetailPage() {
     match: Match | null;
   }>(MATCH_DETAIL_QUERY, {
     variables: { id },
+    skip: !id,
     errorPolicy: 'all',
   });
 
@@ -55,7 +56,9 @@ export function MatchDetailPage() {
         </div>
       </header>
 
-      <div className="match-layout">
+      {/* Keyed by match so per-panel state (e.g. the commentary filter)
+          resets when navigating to another match. */}
+      <div className="match-layout" key={m.id}>
         <div>
           <MatchScoreCard match={m} />
 

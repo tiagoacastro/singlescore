@@ -12,185 +12,80 @@ import {
 } from 'recharts';
 import type { Match } from '@/graphql/types';
 import { EmptyState } from '@/components/EmptyState';
+import { formatMinute } from '@/lib/format';
+import { activeModelPredictions, buildTimelineEvents, isGoal } from '@/lib/timeline';
 
 type ChartPoint = {
   minute: number;
-  forecastAt: string;
   home: number;
   draw: number;
   away: number;
-  // Scoreline at this snapshot — used by the goal-marker derivation
-  // to detect transitions when per-event data isn't available.
-  homeScore: number;
-  awayScore: number;
 };
 
 type Marker = {
   key: string;
-  minute: number;
+  minute: number; // x position, clamped to the 0-90 axis
+  label: string; // minute as shown, e.g. 45'+2
   kind: 'GOAL' | 'RED_CARD';
-  teamSide: 'HOME' | 'AWAY' | null;
+  teamSide: 'HOME' | 'AWAY' | 'NEUTRAL' | null;
   description: string;
-  // When true, the marker's minute is approximate (derived from a
-  // scoreline transition between two grid snapshots rather than from
-  // a per-event source). The tooltip surfaces this so the viewer
-  // isn't misled.
-  approximate?: boolean;
+  // Derived from a scoreline step rather than a per-event feed; drawn
+  // dashed with a "~" minute.
+  approximate: boolean;
 };
 
 type Props = {
-  match: Pick<Match, 'modelPredictions' | 'events'>;
+  match: Pick<
+    Match,
+    'modelPredictions' | 'events' | 'homeScore' | 'awayScore' | 'homeTeam' | 'awayTeam'
+  >;
 };
 
-// ProbabilityTimeline renders the per-minute probability-evolution
-// chart plus goal / red-card markers along the X-axis.
-//
-// Data is derived from the match's `modelPredictions` (collapsed to
-// one point per unique minute — snapshots that landed on the same
-// minute keep only the last write) and `events` (filtered to goals +
-// red cards, clamped to the 0-90 chart domain).
+// ProbabilityTimeline charts the newest model's home / draw / away
+// probabilities by match minute, with goal and red-card markers along
+// the X-axis.
 export function ProbabilityTimeline({ match }: Props) {
-  // chartData + markers are derived; useMemo stops Recharts from
-  // re-mounting on every parent re-render.
-  //
-  // Filter: when multiple model versions coexist in the DB (we swap the
-  // baseline from time to time), always render only the newest one so
-  // the line doesn't flip between formulas minute-to-minute. "Newest"
-  // = the (name, version) pair with the max forecast_at timestamp.
-  const chartData: ChartPoint[] = useMemo(() => {
-    const all = match.modelPredictions ?? [];
-    if (all.length === 0) return [];
-    // Pick the latest-active (name, version).
-    const latest = all.reduce((best, p) =>
-      !best || p.forecastAt > best.forecastAt ? p : best,
-    );
-    const activeName = latest.modelName;
-    const activeVersion = latest.modelVersion;
+  // Memoised so Recharts doesn't re-mount on unrelated re-renders.
+  const { chartData, activeModel } = useMemo(() => {
+    const active = activeModelPredictions(match.modelPredictions ?? []);
+    // One point per minute; a later write at the same minute wins.
     const byMinute = new Map<number, ChartPoint>();
-    all
-      .filter((p) => p.modelName === activeName && p.modelVersion === activeVersion)
-      .forEach((p) => {
-        const minute = p.matchMinute ?? 0;
-        byMinute.set(minute, {
-          minute,
-          forecastAt: p.forecastAt,
-          home: Math.round(p.pHome * 1000) / 10,
-          draw: Math.round(p.pDraw * 1000) / 10,
-          away: Math.round(p.pAway * 1000) / 10,
-          homeScore: p.homeScoreAtForecast ?? 0,
-          awayScore: p.awayScoreAtForecast ?? 0,
-        });
+    for (const p of active) {
+      const minute = p.matchMinute ?? 0;
+      byMinute.set(minute, {
+        minute,
+        home: Math.round(p.pHome * 1000) / 10,
+        draw: Math.round(p.pDraw * 1000) / 10,
+        away: Math.round(p.pAway * 1000) / 10,
       });
-    return Array.from(byMinute.values()).sort((a, b) => a.minute - b.minute);
-  }, [match.modelPredictions]);
-
-  // Markers for the chart X-axis. Priority:
-  //   1. Per-event data from api-football (precise minute + player +
-  //      description). Available for matches inside the free-tier
-  //      3-day window.
-  //   2. Fallback: derive goal markers from scoreline transitions
-  //      between consecutive chart snapshots. Minute is approximate
-  //      (the step appears at the next grid point after the real
-  //      goal) but the fact and side are correct. Honest-labelled
-  //      via the "approximate" flag so the tooltip can note it.
-  const markers: Marker[] = useMemo(() => {
-    const apiEvents = (match.events ?? []).filter(
-      (ev): ev is NonNullable<typeof ev> =>
-        ev != null &&
-        (ev.eventType === 'GOAL' || ev.eventType === 'OWN_GOAL' || ev.eventType === 'RED_CARD') &&
-        ev.minute != null,
-    );
-    const hasApiGoals = apiEvents.some((e) => e.eventType !== 'RED_CARD');
-    if (hasApiGoals) {
-      return apiEvents.map((ev) => ({
-        key: ev.id,
-        // Clamp to the chart's 0-90 X-axis. Stoppage-time events pin
-        // to 45 or 90 because that's where the probability snapshot
-        // was taken too.
-        minute: Math.min(90, Math.max(0, ev.minute ?? 0)),
-        kind: ev.eventType === 'RED_CARD' ? 'RED_CARD' : 'GOAL',
-        teamSide: (ev.teamSide as 'HOME' | 'AWAY' | null) ?? null,
-        description: ev.description ?? '',
-        approximate: false,
-      }));
     }
-    // Fallback: walk the sorted chart snapshots, emit a GOAL marker
-    // for every net home / away score increment between consecutive
-    // points. Works whenever modelPredictions carry homeScoreAtForecast
-    // / awayScoreAtForecast — which they do for every FINISHED match
-    // reconstructed from HT/FT scoreline (always present on
-    // football-data.org's free tier).
-    const derived: Marker[] = [];
-    let prevH = 0;
-    let prevA = 0;
-    chartData.forEach((pt, i) => {
-      if (i === 0) {
-        prevH = pt.homeScore;
-        prevA = pt.awayScore;
-        return;
-      }
-      const dH = pt.homeScore - prevH;
-      const dA = pt.awayScore - prevA;
-      for (let g = 0; g < dH; g++) {
-        derived.push({
-          key: `derived-H-${pt.minute}-${g}`,
-          minute: pt.minute,
-          kind: 'GOAL',
-          teamSide: 'HOME',
-          description: 'exact minute unknown (no per-event data)',
-          approximate: true,
-        });
-      }
-      for (let g = 0; g < dA; g++) {
-        derived.push({
-          key: `derived-A-${pt.minute}-${g}`,
-          minute: pt.minute,
-          kind: 'GOAL',
-          teamSide: 'AWAY',
-          description: 'exact minute unknown (no per-event data)',
-          approximate: true,
-        });
-      }
-      prevH = pt.homeScore;
-      prevA = pt.awayScore;
-    });
-    return derived;
-  }, [match.events, chartData]);
-
-  // When several markers land on the same minute (e.g. two goals in
-  // the HT→FT delta of a match with no per-event data), spread them
-  // out horizontally via an SVG-pixel offset so they don't overlap.
-  // The underlying X-axis coordinate stays identical so the tooltip
-  // and minute label are still correct.
-  const markersWithOffset = useMemo(() => {
-    const byMinute = new Map<number, Marker[]>();
-    markers.forEach((m) => {
-      const bucket = byMinute.get(m.minute) ?? [];
-      bucket.push(m);
-      byMinute.set(m.minute, bucket);
-    });
-    const out: (Marker & { pxOffset: number })[] = [];
-    const spacingPx = 18;
-    byMinute.forEach((bucket) => {
-      const n = bucket.length;
-      bucket.forEach((m, i) => {
-        const centred = i - (n - 1) / 2;
-        out.push({ ...m, pxOffset: centred * spacingPx });
-      });
-    });
-    return out;
-  }, [markers]);
-
-  // Which model is actually driving the plot (surfaced in the header
-  // so viewers can tell what formula they're looking at).
-  const activeModel = useMemo(() => {
-    const all = match.modelPredictions ?? [];
-    if (all.length === 0) return null;
-    const latest = all.reduce((best, p) =>
-      !best || p.forecastAt > best.forecastAt ? p : best,
-    );
-    return { name: latest.modelName, version: latest.modelVersion };
+    return {
+      chartData: [...byMinute.values()].sort((a, b) => a.minute - b.minute),
+      activeModel: active[0] ? `${active[0].modelName} ${active[0].modelVersion}` : null,
+    };
   }, [match.modelPredictions]);
+
+  // Goal / red-card markers. Markers sharing a minute are spread out by
+  // a pixel offset so they don't overlap (the x coordinate is unchanged).
+  const markers = useMemo(() => {
+    const out: Marker[] = buildTimelineEvents(match)
+      .filter((e) => (isGoal(e) || e.eventType === 'RED_CARD') && e.minute != null)
+      .map((e) => ({
+        key: e.id,
+        minute: Math.min(90, Math.max(0, e.minute ?? 0)),
+        label: formatMinute(e.minute, e.addedMinute, e.approximate),
+        kind: e.eventType === 'RED_CARD' ? 'RED_CARD' : 'GOAL',
+        teamSide: e.teamSide,
+        description: e.description ?? '',
+        approximate: e.approximate,
+      }));
+    const byMinute = new Map<number, Marker[]>();
+    for (const m of out) byMinute.set(m.minute, [...(byMinute.get(m.minute) ?? []), m]);
+    const spacingPx = 18;
+    return [...byMinute.values()].flatMap((bucket) =>
+      bucket.map((m, i) => ({ ...m, pxOffset: (i - (bucket.length - 1) / 2) * spacingPx })),
+    );
+  }, [match]);
 
   if (chartData.length === 0) {
     return (
@@ -212,7 +107,7 @@ export function ProbabilityTimeline({ match }: Props) {
       <h2>Probability timeline</h2>
       <span className="card__subtitle">
         {chartData.length} snapshots
-        {activeModel ? ` · ${activeModel.name} ${activeModel.version}` : ''}
+        {activeModel ? ` · ${activeModel}` : ''}
       </span>
     </div>
     <div className="chart-wrap">
@@ -240,11 +135,7 @@ export function ProbabilityTimeline({ match }: Props) {
           <Line type="monotone" dataKey="home" stroke="#38d996" dot={{ r: 3 }} activeDot={{ r: 5 }} name="Home" />
           <Line type="monotone" dataKey="draw" stroke="#9aa6ba" dot={{ r: 3 }} activeDot={{ r: 5 }} name="Draw" />
           <Line type="monotone" dataKey="away" stroke="#ff7fa3" dot={{ r: 3 }} activeDot={{ r: 5 }} name="Away" />
-          {/* Goal + red-card markers along the X-axis. Only rendered
-              when we actually have event data for this match
-              (api-football provides this on recent matches only —
-              free-tier 3-day sliding window). */}
-          {markersWithOffset.map((mk) => (
+          {markers.map((mk) => (
             <ReferenceDot
               key={mk.key}
               x={mk.minute}
@@ -292,13 +183,11 @@ function EventMarkerShape({ cx, cy, payload }: MarkerShapeProps) {
   // Approximate markers (derived from scoreline, no per-event source)
   // render with a dashed stroke and a tilde-prefixed minute label so
   // the viewer can distinguish them from precise ones.
-  const approx = payload.approximate === true;
+  const approx = payload.approximate;
   const strokeDash = approx ? '2 2' : undefined;
-  const minuteText = approx ? `~${payload.minute}'` : `${payload.minute}'`;
-  const tooltipMinute = approx ? `~${payload.minute}'` : `${payload.minute}'`;
   return (
     <g>
-      <title>{`${tooltipMinute} — ${payload.kind === 'GOAL' ? 'Goal' : 'Red card'}${
+      <title>{`${payload.label} — ${payload.kind === 'GOAL' ? 'Goal' : 'Red card'}${
         payload.teamSide ? ` (${payload.teamSide})` : ''
       }${payload.description ? ' — ' + payload.description : ''}`}</title>
       {isGoal ? (
@@ -329,7 +218,7 @@ function EventMarkerShape({ cx, cy, payload }: MarkerShapeProps) {
         fontStyle={approx ? 'italic' : 'normal'}
         style={{ fontFeatureSettings: '"tnum"' }}
       >
-        {minuteText}
+        {payload.label}
       </text>
     </g>
   );
