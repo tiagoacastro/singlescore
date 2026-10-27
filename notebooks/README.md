@@ -1,103 +1,107 @@
 # Notebooks
 
-Hourly idempotent ingest jobs that keep SingleStore populated without hitting
-any paid APIs. The notebook is also runnable as a plain Python script
-(`scripts/ingest_pl_season.py`) so local dev doesn't require a Jupyter kernel.
+Two hourly, idempotent ingest jobs keep SingleStore populated for the five
+leagues in `scripts/ingest_common.py` (`LEAGUES`): Premier League, La Liga,
+Serie A, Bundesliga and Primeira Liga, current season (2026/27).
 
-## `premier_league_ingest.ipynb`
+Both notebooks are **generated** — edit the scripts, then regenerate:
 
-**Source:** [football-data.co.uk](https://www.football-data.co.uk/englandm.php)
-— a long-running free archive of English football match data. Permitted for
-personal / educational use; no HTML scraping (one HTTPS `GET` of a `.csv`
-file per run). CSV includes:
+```bash
+python3 scripts/build_notebooks.py          # rewrite both notebooks
+python3 scripts/build_notebooks.py --check  # exit 1 if they're stale
+```
 
-- Full-time and half-time goals + referee
-- Expected goals (`HxG`, `AxG`)
-- Shots, shots on target, corners, fouls, yellows, reds
-- Pre-match 1X2 odds from Bet365, BetVictor, William Hill, Pinnacle,
-  plus `Avg*` market consensus
+| Notebook | Generated from | Schedule |
+| -------- | -------------- | -------- |
+| `season_ingest.ipynb` | `scripts/ingest_season.py` | `0 * * * *` |
+| `events_espn.ipynb` | `scripts/ingest_events_espn.py` | `10 * * * *` |
+
+SingleStore Portal notebooks can't import files from this repo, so the
+generator inlines `scripts/ingest_common.py` (league table, connection,
+ids, upsert and run-log helpers) at the top of each notebook.
+
+## `season_ingest.ipynb` — football-data.co.uk
+
+**Source:** [football-data.co.uk](https://www.football-data.co.uk/data.php),
+one public CSV per league (`mmz4281/2627/{E0,SP1,I1,D1,P1}.csv`), free for
+personal / educational use; no scraping. Each CSV has full-time and
+half-time goals, xG, shots, shots on target, corners, fouls, cards and
+pre-match 1X2 odds (the referee only for English divisions). Kickoff times
+are UK local time and are stored as UTC.
 
 **What it writes** per run:
 
-| Table                   | Rows (2026/27 as of this writing) |
-| ----------------------- | --------------------------------- |
-| `competitions`          | 1 (Premier League 2026/27)        |
-| `teams`                 | 20 (with chronologically-updated Elo) |
-| `matches`               | ~80 (one row per fixture)         |
-| `model_predictions`     | ~1 700 (5-min grid + HT + FT + one per goal / red-card minute, from ESPN `match_events` when they agree with the CSV score, else HT/FT approximation) |
-| `benchmark_predictions` | ~80 (one market-consensus row per played match) |
-| `match_stats`           | ~80 (xG, shots, SOT, corners, fouls, cards, referee per played match) |
-| `data_ingestion_runs`   | 1 (keyed on `provider|yyyy-mm-ddTHH`) |
+| Table | Rows (2026/27 as of this writing) |
+| ----- | --------------------------------- |
+| `competitions` | 5 |
+| `teams` | 96, with Elo walked chronologically per league |
+| `matches` | 403 |
+| `model_predictions` | ~8 600: pre-match + 5-min grid + HT + FT, plus one per goal / red-card minute when the ESPN events agree with the CSV score (HT/FT approximation otherwise) |
+| `benchmark_predictions` | 403 market-consensus rows (Avg odds, else Bet365, de-vigged) |
+| `match_stats` | 403 |
+| `data_ingestion_runs` | 1 per hour (`football-data-couk` / `notebook-season`) |
 
-Row counts stay flat on hourly re-runs because every row has a deterministic
-SHA-1-derived UUID and every write uses `INSERT ... ON DUPLICATE KEY UPDATE`.
+Row counts stay flat on re-runs: every row has a deterministic SHA-1-derived
+UUID and every write is `INSERT ... ON DUPLICATE KEY UPDATE`. A league whose
+CSV fails to download is skipped and the run is recorded as `PARTIAL`.
+About 10 s end-to-end.
 
-Walltime: ~4 s end-to-end against a starter-tier SingleStore cluster.
+## `events_espn.ipynb` — ESPN per-event data + commentary
 
-### Running locally
-
-```bash
-# One-off deps for the venv:
-uv venv .venv --python 3.12
-uv pip install --python .venv/bin/python pandas requests pymysql
-
-# Run it:
-.venv/bin/python scripts/ingest_pl_season.py
-```
-
-Reads SingleStore credentials from `.env` (gitignored).
-
-### Scheduling in SingleStore Portal
-
-1. Portal → **Develop** → **Notebooks** → **Upload** → pick
-   `notebooks/premier_league_ingest.ipynb`.
-2. Attach the notebook to the workspace that owns the `singlescore`
-   database.
-3. **Jobs** → **Create Job** → choose the notebook, set cron `0 * * * *`
-   (hourly on the hour), save.
-4. The job inherits the workspace connection via `SINGLESTOREDB_URL`;
-   the notebook's `connect()` helper picks it up automatically.
-
-### Changing the season
-
-Set the `PL_CSV_URL` env var (local) or notebook variable to the desired
-season's E0 CSV. Season codes are two-digit yy-yy, e.g. `2425` for
-2024/25, `2526` for 2025/26, `2627` for 2026/27.
-
-## `premier_league_events_espn.ipynb`
-
-**Source:** ESPN's public JSON endpoints (`site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard?dates=YYYYMMDD`
-and `.../summary?event={id}`). This is scraping of an undocumented
-endpoint, done at the project owner's explicit direction; it is not a
-licensed feed. Requests are throttled to one every 300 ms and hourly
-re-runs only touch matches with no events yet or kicked off in the last
-7 days (~10 requests per run after the first backfill).
-
-Generated from `scripts/ingest_pl_events_espn.py` — edit the script and
-regenerate the notebook rather than editing cells by hand.
+**Source:** ESPN's public JSON (`site.api.espn.com/apis/site/v2/sports/soccer/<slug>/scoreboard?dates=YYYYMMDD`
+and `.../summary?event={id}`), one slug per league (`eng.1`, `esp.1`,
+`ita.1`, `ger.1`, `por.1`). This is scraping of an undocumented endpoint,
+done at the project owner's explicit direction; it is not a licensed
+feed. Requests are 300 ms apart, and each run only fetches matches with
+no events yet or that kicked off in the last 7 days.
 
 **What it writes:**
 
-| Table              | Rows (2026/27 as of this writing) |
-| ------------------ | --------------------------------- |
-| `match_events`     | ~1 510 — goals (incl. `goal---volley`/`header` subtypes), own goals, penalties, cards, subs, VAR/injury delays, with exact minute + stoppage time |
-| `match_commentary` | ~8 880 — every commentary line, classified into `kind` (`ATTEMPT_SAVED`, `ATTEMPT_BLOCKED`, `ATTEMPT_MISSED`, `FOUL`, `CORNER`, `OFFSIDE`, …) and `team_side` |
+| Table | Rows (2026/27 as of this writing) |
+| ----- | --------------------------------- |
+| `match_events` | ~8 400: goals (every `goal---*` subtype), own goals, penalties, cards, subs, VAR / injury delays, with exact minute + stoppage time |
+| `match_commentary` | ~45 700: every commentary line, classified into `kind` (`ATTEMPT_SAVED`, `FOUL`, `CORNER`, …) and `team_side` |
 
-ESPN team names are mapped onto football-data.co.uk names
-(`TEAM_NAME_MAP`) so rows attach to the matches written by
-`premier_league_ingest.ipynb`; run that one first. Own goals are
-attributed to the team that benefits.
+ESPN team names are mapped onto football-data.co.uk names per league
+(`TEAM_NAME_MAPS`) so rows attach to the matches the season ingest
+writes; run that one first. Own goals are credited to the team that
+benefits. A full backfill of all five leagues takes about 7 minutes; an
+hourly run takes under a minute.
 
-Locally: `.venv/bin/python scripts/ingest_pl_events_espn.py` (~85 s for a
-full-season backfill, ~11 s incremental). Schedule in Portal the same way
-as above, e.g. cron `10 * * * *` so it runs after the CSV ingest.
+Because the season ingest reads these events to build its timelines, a
+newly played match gets its event-driven timeline on the season run
+after the ESPN run that scraped it.
 
-### Keeping the model in sync with the Go backend
+## Running locally
 
-The Poisson-race constants in cell 4 (`AVG_GOALS_PER_TEAM`,
-`ELO_HALF_LIFE`, `RED_CARD_FACTOR`, `HOME_ADVANTAGE`,
-`MAX_EXTRA_GOALS`) and the model identity (`MODEL_NAME`,
-`MODEL_VERSION`) **must** match
-`backend/internal/prediction/baseline.go`. If you bump the Go version,
-bump the Python one too (and vice versa) so a row written by the
-notebook is indistinguishable from one written by the Go backend.
+```bash
+uv venv .venv --python 3.12
+uv pip install --python .venv/bin/python pandas requests pymysql
+
+.venv/bin/python scripts/ingest_season.py
+.venv/bin/python scripts/ingest_events_espn.py
+.venv/bin/python scripts/ingest_season.py   # rebuild timelines from the new events
+```
+
+The scripts read SingleStore credentials from `.env` (gitignored).
+
+## Scheduling in SingleStore Portal
+
+1. Portal → **Develop** → **Notebooks** → **Upload** both notebooks.
+2. Attach them to the workspace that owns the `singlescore` database.
+3. **Jobs** → **Create Job** for each, with the crons above.
+4. Jobs inherit the workspace connection via `SINGLESTOREDB_URL`.
+
+## Changing the season or leagues
+
+Edit `SEASON` / `SEASON_CODE` or `LEAGUES` in `scripts/ingest_common.py`
+(and add the ESPN team-name map for a new league), then regenerate the
+notebooks.
+
+## Keeping the model in sync with the Go reference
+
+The predictor constants in `scripts/ingest_season.py`
+(`AVG_GOALS_PER_TEAM`, `ELO_HALF_LIFE`, `RED_CARD_FACTOR`,
+`HOME_ADVANTAGE`, `MAX_EXTRA_GOALS`) and the model identity (`MODEL_NAME`,
+`MODEL_VERSION`) **must** match `backend/internal/prediction/baseline.go`,
+the Go reference implementation. Bump both together.

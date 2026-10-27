@@ -21,9 +21,9 @@ The MVP intentionally covers only the following top-flight leagues:
 | Spain    | La Liga          | `PD`                   |
 | Germany  | Bundesliga       | `BL1`                  |
 
-Ingestion notebooks must restrict their output to these competitions so
-no out-of-scope data reaches `matches` or `model_predictions`. Only the
-Premier League is loaded today.
+The ingest scripts only load the leagues in `scripts/ingest_common.py`
+(`LEAGUES`), which are exactly these five (football-data.co.uk divisions
+`P1`, `E0`, `I1`, `SP1`, `D1`).
 
 ## Picked (free-tier only)
 
@@ -32,16 +32,16 @@ Premier League is loaded today.
 - Role: **primary** source. One public CSV per season with full-time and
   half-time scores, referee, xG, shots, corners, fouls, cards and
   pre-match 1X2 odds. Free for personal / educational use.
-- Loaded by `notebooks/premier_league_ingest.ipynb`
-  (`scripts/ingest_pl_season.py`).
+- Loaded by `notebooks/season_ingest.ipynb` (`scripts/ingest_season.py`),
+  one CSV per league.
 
 ### ESPN (public JSON endpoints)
 - Role: per-event data (exact goal / card / substitution / VAR minutes)
   and minute-by-minute commentary for completed matches.
 - Undocumented endpoint, scraped with the project owner's explicit
   authorisation and throttled; not a licensed feed.
-- Loaded by `notebooks/premier_league_events_espn.ipynb`
-  (`scripts/ingest_pl_events_espn.py`).
+- Loaded by `notebooks/events_espn.ipynb` (`scripts/ingest_events_espn.py`),
+  one ESPN league slug per league.
 
 ### StatsBomb Open Data
 - Repo: https://github.com/statsbomb/open-data

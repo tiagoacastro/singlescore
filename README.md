@@ -81,9 +81,9 @@ SingleScore/
 # 2) load the season (see "Data" below). On a fresh database run the CSV
 #    ingest again after the ESPN scrape so the probability timelines are
 #    rebuilt from the real goal / red-card minutes.
-.venv/bin/python scripts/ingest_pl_season.py
-.venv/bin/python scripts/ingest_pl_events_espn.py
-.venv/bin/python scripts/ingest_pl_season.py
+.venv/bin/python scripts/ingest_season.py
+.venv/bin/python scripts/ingest_events_espn.py
+.venv/bin/python scripts/ingest_season.py
 
 # 3) start the backend (serves GraphQL on :8080)
 cd backend && go run ./cmd/server
@@ -94,9 +94,9 @@ cd frontend && npm install && npm run dev
 # → open http://127.0.0.1:3000
 ```
 
-GraphQL endpoint: `POST http://127.0.0.1:8080/graphql`. GraphiQL /
+GraphQL endpoint: `POST http://127.0.0.1:8080/graphql`. The GraphQL
 Playground is served at `GET http://127.0.0.1:8080/` when
-`BACKEND_LOG_LEVEL=debug` or `BACKEND_DEMO_MODE=true`.
+`BACKEND_LOG_LEVEL=debug`.
 
 ### Playwright e2e
 
@@ -118,79 +118,45 @@ cd backend && go test ./...
 ## Data
 
 The app is **historical-only**: the backend is a read-only GraphQL API
-and never calls a football data provider. All rows are written by the
-notebooks below and tagged `provenance = 'HISTORICAL'`.
-`BACKEND_DEMO_MODE` (default `true`) only shows the DEMO badge in the
-header and serves the GraphQL Playground.
+and never calls a football data provider. Two hourly SingleStore
+notebooks load the current season of the Premier League, La Liga,
+Serie A, Bundesliga and Primeira Liga (403 matches as of this writing)
+and tag every row `provenance = 'HISTORICAL'`:
+
+- [`notebooks/season_ingest.ipynb`](notebooks/season_ingest.ipynb):
+  football-data.co.uk CSVs (results, stats, pre-match odds), Elo per
+  league, and the model's retrospective probability timelines.
+- [`notebooks/events_espn.ipynb`](notebooks/events_espn.ipynb): exact
+  goal / card / sub / VAR minutes and the minute-by-minute commentary,
+  scraped from ESPN's public JSON (explicitly authorised by the project
+  owner; not a licensed feed).
+
+Both are generated from `scripts/` (`python3 scripts/build_notebooks.py`)
+and run locally as plain scripts; see
+[`notebooks/README.md`](notebooks/README.md) for what they write and how
+to schedule them in the Portal.
 
 Match lists, the dashboard and the match page's score card show the
 model's **pre-match** odds. Later snapshots of a finished match converge
 on the result (100% for the winner), so they say nothing about the
-forecast; the dashboard's Brier / log-loss cards score the pre-match
-prediction for the same reason.
+forecast. For the same reason the dashboard and the evaluation page score
+the pre-match prediction, and full-time snapshots are never scored.
 
-### Historical ingestion (football-data.co.uk, hourly notebook)
-
-All match data is pulled from a single public CSV at
-[football-data.co.uk](https://www.football-data.co.uk/englandm.php)
-(free for personal / educational use, one HTTPS `GET` per run) by a
-SingleStore notebook that runs on an hourly schedule.
-
-Source of truth: [`notebooks/premier_league_ingest.ipynb`](notebooks/premier_league_ingest.ipynb)
-(see [`notebooks/README.md`](notebooks/README.md) for how to upload and
-schedule it in the SingleStore Portal). The same body ships as
-[`scripts/ingest_pl_season.py`](scripts/ingest_pl_season.py) so you can
-run it locally without a Jupyter kernel:
-
-```bash
-uv venv .venv --python 3.12
-uv pip install --python .venv/bin/python pandas requests pymysql
-.venv/bin/python scripts/ingest_pl_season.py
-```
-
-What it populates per run (fully idempotent — deterministic SHA-1 UUIDs
-+ `INSERT ... ON DUPLICATE KEY UPDATE`):
-
-- One `competitions` row (Premier League 2026/27)
-- 20 `teams` rows with chronologically-updated Elo ratings
-- ~80 `matches` rows
-- ~1 700 `model_predictions` (retrospective timeline per played match,
-  using the `elo-poisson v0.2.0` baseline shared with the Go backend): a
-  5-minute grid + half-time + full-time, plus a snapshot at every goal /
-  red-card minute. Scorelines and red cards come from the ESPN
-  `match_events` below when their goals add up to the CSV final score
-  (`features_json.score_source = "events"`); otherwise they fall back to
-  the HT/FT approximation. A brand-new match picks up its event-driven
-  timeline on the next hourly run after the ESPN notebook has scraped it.
-- ~80 `benchmark_predictions` (market-consensus pre-match row per
-  played match, derived from the Avg / Bet365 1X2 odds columns)
-- One `data_ingestion_runs` row (keyed on `provider|yyyy-mm-ddTHH`)
-
-### Per-event data + minute-by-minute commentary (ESPN, hourly notebook)
-
-The CSV has no per-event timings, so exact goal / card / substitution
-minutes, VAR delays, and the full commentary feed (shots saved, blocked,
-missed, fouls, corners, offsides) are scraped from ESPN's public JSON
-endpoints by
-[`notebooks/premier_league_events_espn.ipynb`](notebooks/premier_league_events_espn.ipynb)
-(generated from [`scripts/ingest_pl_events_espn.py`](scripts/ingest_pl_events_espn.py)).
-This scraping was explicitly authorised by the project owner; it is not
-a licensed feed and is throttled (300 ms between requests, incremental
-re-runs only refetch the last 7 days). It writes `match_events` and
-`match_commentary` (migration `0004`), which feed the match page's event
-timeline, opportunity map, and minute-by-minute panel.
+The Matches page filters by competition and by team name (case-insensitive
+substring), with filters kept in the URL.
 
 ## Model honesty
 
-- Predictions come from an internal, transparent baseline (`elo-baseline
-  v0.1.0`): Elo expectancy with home-field advantage, then in-play
-  adjustments for scoreline, minute, and red-card imbalance.
+- Predictions come from an internal, transparent baseline (`elo-poisson
+  v0.2.0`): a Poisson race over the remaining minutes with Elo-driven
+  scoring rates, home advantage and a red-card penalty.
 - Nothing in the UI claims this model beats any benchmark.
 - Every snapshot stores `(forecast_at, match_minute, home_score_at_fc,
   away_score_at_fc, model_version, provenance)` so evaluation is
   leakage-free.
-- Benchmark predictions are only captured prospectively. We never
-  reconstruct a historical forecast from a current one.
+- Benchmarks are the bookmakers' pre-match 1X2 odds (market average)
+  from the CSV, de-vigged. Over the 2026/27 season so far they beat the
+  model (Brier 0.569 vs 0.640 pre-match).
 
 ## Verified vs. pending
 
@@ -207,8 +173,8 @@ timeline, opportunity map, and minute-by-minute panel.
 | Frontend scaffolding               | complete; `npm run typecheck` + `npm run build` clean |
 | Dashboard + Match detail pages     | complete, rendering real GraphQL data                 |
 | Model evaluation page              | complete, calibration/minute-bucket/competition views |
-| Playwright e2e                     | 3 specs green against the running stack               |
-| ESPN events + commentary scrape    | complete; `notebooks/premier_league_events_espn.ipynb` + `scripts/ingest_pl_events_espn.py`, 80/80 matches matched |
-| football-data.co.uk CSV ingest     | complete; `notebooks/premier_league_ingest.ipynb` + `scripts/ingest_pl_season.py`, idempotent, ~4s per run |
-| Scheduled ingestion job            | complete via SingleStore Portal → Jobs on the notebook (hourly cron) |
+| Playwright e2e                     | 5 specs green against the running stack               |
+| ESPN events + commentary scrape    | complete for all 5 leagues; `notebooks/events_espn.ipynb` + `scripts/ingest_events_espn.py`, 403/403 matches matched |
+| football-data.co.uk CSV ingest     | complete for all 5 leagues; `notebooks/season_ingest.ipynb` + `scripts/ingest_season.py`, idempotent, ~10 s per run |
+| Scheduled ingestion jobs           | **pending** — notebooks are ready; create the two hourly Jobs in the Portal (runs so far were local) |
 | Figma designs                      | **pending** — using in-repo SCSS tokens for v1        |
