@@ -5,6 +5,10 @@ type Props = {
   match: Pick<Match, 'commentary' | 'homeTeam' | 'awayTeam'>;
 };
 
+// A commentary line with a match minute. Untimed lines (lineups
+// announced, period start / end) are dropped before display.
+type TimedCommentary = MatchCommentary & { minute: number };
+
 // Grouping used by the filter-chip row. "ALL" is the implicit default.
 // Each group collects one or more kinds from the raw ESPN
 // classification; e.g. "Goals" includes both GOAL and OWN_GOAL,
@@ -108,17 +112,15 @@ function labelFor(kind: string): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
-function minuteLabel(row: MatchCommentary): string {
-  if (row.minute == null) return '-';
-  const base = `${row.minute}'`;
-  return row.addedMinute ? `${row.minute}'+${row.addedMinute}` : base;
+function minuteLabel(row: TimedCommentary): string {
+  return row.addedMinute ? `${row.minute}'+${row.addedMinute}` : `${row.minute}'`;
 }
 
 // Reverse-chronological ordering helps a reader scan the latest
 // action first (same as Flashscore / ESPN gamecast). We sort by
 // (period desc, minute desc, addedMinute desc, sequence desc) so
 // first-half rows always precede nothing from the second half.
-function sortedDesc(rows: ReadonlyArray<MatchCommentary>): MatchCommentary[] {
+function sortedDesc<T extends MatchCommentary>(rows: ReadonlyArray<T>): T[] {
   return [...rows].sort((a, b) => {
     const pa = a.period ?? 0;
     const pb = b.period ?? 0;
@@ -134,11 +136,14 @@ function sortedDesc(rows: ReadonlyArray<MatchCommentary>): MatchCommentary[] {
 }
 
 // MatchCommentaryPanel renders a filterable, minute-by-minute feed
-// scraped from ESPN. Hidden entirely when no commentary rows are
+// scraped from ESPN. Hidden entirely when no timed commentary rows are
 // present (e.g. matches we haven't backfilled yet) so it never shows
 // as an empty block.
 export function MatchCommentaryPanel({ match }: Props) {
-  const rows = match.commentary ?? [];
+  const rows = useMemo(
+    () => (match.commentary ?? []).filter((r): r is TimedCommentary => r.minute != null),
+    [match.commentary],
+  );
   const [activeFilter, setActiveFilter] = useState<string>('ALL');
 
   // Per-group counts for the chip badges. Memoised so chip clicks
