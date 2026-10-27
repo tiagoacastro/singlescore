@@ -93,7 +93,7 @@ func TestFetchFixtureMappingForDates_FiltersToConfiguredLeagues(t *testing.T) {
 	}
 }
 
-func TestFetchEventsForFixture_FiltersToGoalsAndRedCards(t *testing.T) {
+func TestFetchEventsForFixture_ClassifiesFullEventFeed(t *testing.T) {
 	payload := `{
 	  "get": "fixtures/events",
 	  "errors": [],
@@ -138,19 +138,40 @@ func TestFetchEventsForFixture_FiltersToGoalsAndRedCards(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FetchEventsForFixture: %v", err)
 	}
-	// Expect: Isco goal (23'), 2nd yellow red (55'+2), Suso penalty (72').
-	// Dropped: yellow card, substitution, missed penalty, VAR.
-	if len(events) != 3 {
-		t.Fatalf("expected 3 kept events, got %d: %+v", len(events), events)
+	// Expect, in order:
+	//   0: GOAL (Isco, 23')             — normal goal
+	//   1: YELLOW_CARD (Garcia, 40')    — plain yellow
+	//   2: RED_CARD (Garcia, 55'+2)     — 2nd yellow becomes red
+	//   3: SUBSTITUTION (Lopez, 60')    — subst
+	//   4: GOAL (Suso, 72')             — penalty
+	//   5: VAR (Moi, 85')               — goal cancelled
+	// Dropped: missed penalty (80') — the only thing filtered out.
+	if len(events) != 6 {
+		t.Fatalf("expected 6 kept events, got %d: %+v", len(events), events)
 	}
-	if events[0].EventType != "GOAL" || events[0].Minute != 23 {
-		t.Fatalf("event[0] mismatch: %+v", events[0])
+	want := []struct {
+		kind     string
+		minute   int
+		descHint string
+	}{
+		{"GOAL", 23, "Normal Goal"},
+		{"YELLOW_CARD", 40, "Yellow Card"},
+		{"RED_CARD", 55, "Second Yellow"},
+		{"SUBSTITUTION", 60, "Substitution"},
+		{"GOAL", 72, "Penalty"},
+		{"VAR", 85, "Goal cancelled"},
 	}
-	if events[1].EventType != "RED_CARD" || events[1].Minute != 55 || events[1].AddedMinute == nil || *events[1].AddedMinute != 2 {
-		t.Fatalf("event[1] (2nd-yellow red) mismatch: %+v", events[1])
+	for i, w := range want {
+		if events[i].EventType != w.kind || events[i].Minute != w.minute {
+			t.Fatalf("event[%d] type/minute mismatch: want %s@%d, got %+v", i, w.kind, w.minute, events[i])
+		}
+		if !strings.Contains(events[i].Description, w.descHint) {
+			t.Fatalf("event[%d] description missing %q: %q", i, w.descHint, events[i].Description)
+		}
 	}
-	if events[2].EventType != "GOAL" || !strings.Contains(events[2].Description, "Penalty") {
-		t.Fatalf("event[2] (penalty) mismatch: %+v", events[2])
+	// Second-yellow red keeps its extra-minute (+2).
+	if events[2].AddedMinute == nil || *events[2].AddedMinute != 2 {
+		t.Fatalf("second-yellow red should carry +2 extra: %+v", events[2])
 	}
 }
 

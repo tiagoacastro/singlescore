@@ -47,18 +47,33 @@ type Props = {
 export function ProbabilityTimeline({ match }: Props) {
   // chartData + markers are derived; useMemo stops Recharts from
   // re-mounting on every parent re-render (e.g. a 12 s poll tick).
+  //
+  // Filter: when multiple model versions coexist in the DB (we swap the
+  // baseline from time to time), always render only the newest one so
+  // the line doesn't flip between formulas minute-to-minute. "Newest"
+  // = the (name, version) pair with the max forecast_at timestamp.
   const chartData: ChartPoint[] = useMemo(() => {
+    const all = match.modelPredictions ?? [];
+    if (all.length === 0) return [];
+    // Pick the latest-active (name, version).
+    const latest = all.reduce((best, p) =>
+      !best || p.forecastAt > best.forecastAt ? p : best,
+    );
+    const activeName = latest.modelName;
+    const activeVersion = latest.modelVersion;
     const byMinute = new Map<number, ChartPoint>();
-    (match.modelPredictions ?? []).forEach((p) => {
-      const minute = p.matchMinute ?? 0;
-      byMinute.set(minute, {
-        minute,
-        forecastAt: p.forecastAt,
-        home: Math.round(p.pHome * 1000) / 10,
-        draw: Math.round(p.pDraw * 1000) / 10,
-        away: Math.round(p.pAway * 1000) / 10,
+    all
+      .filter((p) => p.modelName === activeName && p.modelVersion === activeVersion)
+      .forEach((p) => {
+        const minute = p.matchMinute ?? 0;
+        byMinute.set(minute, {
+          minute,
+          forecastAt: p.forecastAt,
+          home: Math.round(p.pHome * 1000) / 10,
+          draw: Math.round(p.pDraw * 1000) / 10,
+          away: Math.round(p.pAway * 1000) / 10,
+        });
       });
-    });
     return Array.from(byMinute.values()).sort((a, b) => a.minute - b.minute);
   }, [match.modelPredictions]);
 
@@ -84,16 +99,40 @@ export function ProbabilityTimeline({ match }: Props) {
     [match.events],
   );
 
+  // Which model is actually driving the plot (surfaced in the header
+  // so viewers can tell what formula they're looking at).
+  const activeModel = useMemo(() => {
+    const all = match.modelPredictions ?? [];
+    if (all.length === 0) return null;
+    const latest = all.reduce((best, p) =>
+      !best || p.forecastAt > best.forecastAt ? p : best,
+    );
+    return { name: latest.modelName, version: latest.modelVersion };
+  }, [match.modelPredictions]);
+
   if (chartData.length === 0) {
     return (
-      <EmptyState
-        title="No prediction snapshots yet"
-        description="Model snapshots are generated at kickoff, half-time and full-time, plus every live minute while the match is in play."
-      />
+      <>
+        <div className="card__header">
+          <h2>Probability timeline</h2>
+        </div>
+        <EmptyState
+          title="No prediction snapshots yet"
+          description="Model snapshots are generated at kickoff, half-time and full-time, plus every live minute while the match is in play."
+        />
+      </>
     );
   }
 
   return (
+    <>
+    <div className="card__header">
+      <h2>Probability timeline</h2>
+      <span className="card__subtitle">
+        {chartData.length} snapshots
+        {activeModel ? ` · ${activeModel.name} ${activeModel.version}` : ''}
+      </span>
+    </div>
     <div className="chart-wrap">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={chartData} margin={{ top: 10, right: 20, bottom: 20, left: 0 }}>
@@ -142,6 +181,7 @@ export function ProbabilityTimeline({ match }: Props) {
         </LineChart>
       </ResponsiveContainer>
     </div>
+    </>
   );
 }
 

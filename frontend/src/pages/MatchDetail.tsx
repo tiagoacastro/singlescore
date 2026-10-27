@@ -86,10 +86,6 @@ export function MatchDetailPage() {
       </section>
 
       <section className="card" style={{ marginTop: 24 }}>
-        <div className="card__header">
-          <h2>Probability timeline</h2>
-          <span className="card__subtitle">{m.modelPredictions?.length ?? 0} snapshots</span>
-        </div>
         <ProbabilityTimeline match={m} />
       </section>
 

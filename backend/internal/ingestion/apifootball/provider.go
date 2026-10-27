@@ -15,7 +15,7 @@ import (
 // package ingestion here to avoid an import cycle.
 type Event struct {
 	ExternalID  string
-	EventType   string // "GOAL" or "RED_CARD"
+	EventType   string // "GOAL" | "RED_CARD" | "YELLOW_CARD" | "SUBSTITUTION" | "VAR"
 	TeamAFID    int    // raw api-football team id
 	TeamName    string // raw api-football team name — orchestrator uses
 	// this to map to our internal HOME/AWAY by comparing against the
@@ -221,8 +221,13 @@ func (p *Provider) FetchEventsForFixture(ctx context.Context, afFixtureID int, s
 }
 
 // classifyEvent maps api-football's (type, detail) pair to one of our
-// supported event types. Returns keep=false for anything the UI
-// doesn't plot (plain yellows, subs, VAR, missed penalties, …).
+// supported event types. Returns keep=false only for things we have
+// no use for (missed penalties, api-football-internal event rows).
+//
+// The event panel on the match detail page renders a flashscore /
+// sofascore-style running feed, so we keep goals, cards (both colours),
+// substitutions and VAR decisions. The probability chart's markers
+// filter down to just GOAL and RED_CARD on the frontend.
 //
 // Red-card detection matches both the straight-red case ("Red Card")
 // and the second-yellow-becomes-red case ("Second Yellow card"),
@@ -240,8 +245,18 @@ func classifyEvent(ev APIEvent) (kind string, keep bool) {
 			return "", false
 		}
 		return "GOAL", true
-	case t == "card" && (strings.Contains(d, "red") || strings.Contains(d, "second yellow")):
-		return "RED_CARD", true
+	case t == "card":
+		if strings.Contains(d, "red") || strings.Contains(d, "second yellow") {
+			return "RED_CARD", true
+		}
+		if strings.Contains(d, "yellow") {
+			return "YELLOW_CARD", true
+		}
+		return "", false
+	case t == "subst":
+		return "SUBSTITUTION", true
+	case t == "var":
+		return "VAR", true
 	default:
 		return "", false
 	}

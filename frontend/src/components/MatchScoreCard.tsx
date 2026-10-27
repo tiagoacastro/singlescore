@@ -16,9 +16,19 @@ function pct(p: number) {
 // (full-time snapshot).
 export function MatchScoreCard({ match }: Props) {
   const preds = match.modelPredictions ?? [];
-  const latest = preds.length
-    ? [...preds].sort((a, b) => (b.matchMinute ?? 0) - (a.matchMinute ?? 0))[0]
-    : null;
+  // When multiple model versions coexist, pin to the newest one before
+  // picking the highest-minute row — otherwise the triplet can
+  // disagree with the chart (which also filters to the latest model).
+  const latest = (() => {
+    if (preds.length === 0) return null;
+    const newest = preds.reduce((best, p) =>
+      !best || p.forecastAt > best.forecastAt ? p : best,
+    );
+    const active = preds.filter(
+      (p) => p.modelName === newest.modelName && p.modelVersion === newest.modelVersion,
+    );
+    return active.sort((a, b) => (b.matchMinute ?? 0) - (a.matchMinute ?? 0))[0];
+  })();
 
   return (
     <div className="card">
