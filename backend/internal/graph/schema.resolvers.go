@@ -18,14 +18,6 @@ func (r *queryResolver) Health(ctx context.Context) (*model.Health, error) {
 
 // Dashboard is the resolver for the dashboard field.
 func (r *queryResolver) Dashboard(ctx context.Context) (*model.Dashboard, error) {
-	if r.deps.Service == nil {
-		return &model.Dashboard{
-			RecentFinishedMatches: []*model.Match{},
-			ModelMetrics:          nil,
-			DataSources:           []*model.DataSourceStatus{},
-			SystemStatus:          r.buildHealth(ctx),
-		}, nil
-	}
 	dash, err := r.deps.Service.Dashboard(ctx)
 	if err != nil {
 		return nil, err
@@ -36,44 +28,21 @@ func (r *queryResolver) Dashboard(ctx context.Context) (*model.Dashboard, error)
 
 // Competitions is the resolver for the competitions field.
 func (r *queryResolver) Competitions(ctx context.Context) ([]*model.Competition, error) {
-	if r.deps.Service == nil {
-		return []*model.Competition{}, nil
-	}
 	return r.deps.Service.Competitions(ctx)
 }
 
 // Matches is the resolver for the matches field.
-func (r *queryResolver) Matches(ctx context.Context, status *model.MatchStatus, first *int, after *string) (*model.MatchConnection, error) {
-	if r.deps.Service == nil {
-		return &model.MatchConnection{
-			Edges:      []*model.MatchEdge{},
-			PageInfo:   &model.PageInfo{EndCursor: nil, HasNextPage: false},
-			TotalCount: 0,
-		}, nil
-	}
-	return r.deps.Service.Matches(ctx, status, first, after)
+func (r *queryResolver) Matches(ctx context.Context, status *model.MatchStatus, competitionID *string, team *string, first *int, after *string) (*model.MatchConnection, error) {
+	return r.deps.Service.Matches(ctx, status, competitionID, team, first, after)
 }
 
 // Match is the resolver for the match field.
 func (r *queryResolver) Match(ctx context.Context, id string) (*model.Match, error) {
-	if r.deps.Service == nil {
-		return nil, nil
-	}
 	return r.deps.Service.Match(ctx, id)
 }
 
 // ModelEvaluation is the resolver for the modelEvaluation field.
 func (r *queryResolver) ModelEvaluation(ctx context.Context, modelName *string, modelVersion *string) (*model.EvaluationReport, error) {
-	if r.deps.Service == nil {
-		return &model.EvaluationReport{
-			Summary:                  nil,
-			Calibration:              []*model.CalibrationBin{},
-			ByMinuteBucket:           []*model.MinuteBucketMetric{},
-			ByCompetition:            []*model.CompetitionMetric{},
-			Benchmarks:               []*model.BenchmarkEvaluationSummary{},
-			MissingBenchmarkCoverage: 0,
-		}, nil
-	}
 	return r.deps.Service.ModelEvaluation(ctx, modelName, modelVersion)
 }
 

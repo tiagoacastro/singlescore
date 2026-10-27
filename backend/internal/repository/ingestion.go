@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 )
 
@@ -14,43 +15,39 @@ type Ingestion struct {
 // NewIngestion returns an Ingestion repo.
 func NewIngestion(pool *sql.DB) *Ingestion { return &Ingestion{pool: pool} }
 
-// LatestPerJob returns the most recent run per (provider, job_name).
+// LatestPerJob returns the most recent run of each (provider, job_name),
+// newest first.
 func (i *Ingestion) LatestPerJob(ctx context.Context, limit int) ([]IngestionRun, error) {
 	if limit <= 0 {
 		limit = 20
 	}
-	// Lightweight approach: pull recent rows, then dedup in Go. Fine for MVP.
 	const q = `
-		SELECT id, provider, job_name, status, started_at, finished_at,
-		       records_in, records_out, error_message, details_json
-		FROM data_ingestion_runs
-		ORDER BY started_at DESC
-		LIMIT 200
-	`
+		SELECT r.provider, r.job_name, r.status, r.started_at,
+		       r.records_in, r.records_out, r.error_message
+		FROM data_ingestion_runs r
+		JOIN (
+		  SELECT provider, job_name, MAX(started_at) AS started_at
+		  FROM data_ingestion_runs
+		  GROUP BY provider, job_name
+		) latest ON latest.provider = r.provider AND latest.job_name = r.job_name
+		         AND latest.started_at = r.started_at
+		ORDER BY r.started_at DESC
+		LIMIT ?`
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	rows, err := i.pool.QueryContext(ctx, q)
+	rows, err := i.pool.QueryContext(ctx, q, limit)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("latest ingestion runs: %w", err)
 	}
 	defer rows.Close()
-	seen := make(map[string]struct{})
-	out := make([]IngestionRun, 0, limit)
+	var out []IngestionRun
 	for rows.Next() {
 		var r IngestionRun
-		if err := rows.Scan(&r.ID, &r.Provider, &r.JobName, &r.Status, &r.StartedAt, &r.FinishedAt,
-			&r.RecordsIn, &r.RecordsOut, &r.ErrorMessage, &r.DetailsJSON); err != nil {
+		if err := rows.Scan(&r.Provider, &r.JobName, &r.Status, &r.StartedAt,
+			&r.RecordsIn, &r.RecordsOut, &r.ErrorMessage); err != nil {
 			return nil, err
 		}
-		key := r.Provider + "|" + r.JobName
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		seen[key] = struct{}{}
 		out = append(out, r)
-		if len(out) >= limit {
-			break
-		}
 	}
 	return out, rows.Err()
 }

@@ -75,9 +75,9 @@ func TestArgmax(t *testing.T) {
 
 func TestCompute_SkipsInvalid(t *testing.T) {
 	preds := []Prediction{
-		{PHome: 0.5, PDraw: 0.3, PAway: 0.2, Actual: OutcomeHome},  // valid
-		{PHome: 0.1, PDraw: 0.6, PAway: 0.3, Actual: OutcomeDraw},  // valid
-		{PHome: -0.5, PDraw: 1, PAway: 0.5, Actual: OutcomeHome},   // invalid (negative)
+		{PHome: 0.5, PDraw: 0.3, PAway: 0.2, Actual: OutcomeHome}, // valid
+		{PHome: 0.1, PDraw: 0.6, PAway: 0.3, Actual: OutcomeDraw}, // valid
+		{PHome: -0.5, PDraw: 1, PAway: 0.5, Actual: OutcomeHome},  // invalid (negative)
 	}
 	s, skipped := Compute(preds)
 	if skipped != 1 {

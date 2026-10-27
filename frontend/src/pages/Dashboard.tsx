@@ -3,7 +3,6 @@ import { DASHBOARD_QUERY } from '@/graphql/queries';
 import type { Dashboard } from '@/graphql/types';
 import { EmptyState } from '@/components/EmptyState';
 import { MatchRow } from '@/components/MatchRow';
-import { ProvenanceChip } from '@/components/Chip';
 
 function fmtNumber(n: number | undefined | null, digits = 3) {
   if (n === undefined || n === null || Number.isNaN(n)) return '—';
@@ -33,7 +32,6 @@ export function DashboardPage() {
       <header className="page-header">
         <h1>Overview</h1>
         <div className="page-header__meta">
-          {dash?.systemStatus?.demoMode ? <ProvenanceChip provenance="DEMO" /> : null}
           <span className="chip">{dash?.systemStatus?.status ?? '…'}</span>
         </div>
       </header>

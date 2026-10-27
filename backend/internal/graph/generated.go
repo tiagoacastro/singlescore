@@ -120,7 +120,6 @@ type ComplexityRoot struct {
 
 	Health struct {
 		DatabaseReachable func(childComplexity int) int
-		DemoMode          func(childComplexity int) int
 		StartedAt         func(childComplexity int) int
 		Status            func(childComplexity int) int
 		Version           func(childComplexity int) int
@@ -228,7 +227,7 @@ type ComplexityRoot struct {
 		Dashboard       func(childComplexity int) int
 		Health          func(childComplexity int) int
 		Match           func(childComplexity int, id string) int
-		Matches         func(childComplexity int, status *model.MatchStatus, first *int, after *string) int
+		Matches         func(childComplexity int, status *model.MatchStatus, competitionID *string, team *string, first *int, after *string) int
 		ModelEvaluation func(childComplexity int, modelName *string, modelVersion *string) int
 	}
 
@@ -250,7 +249,7 @@ type QueryResolver interface {
 	Health(ctx context.Context) (*model.Health, error)
 	Dashboard(ctx context.Context) (*model.Dashboard, error)
 	Competitions(ctx context.Context) ([]*model.Competition, error)
-	Matches(ctx context.Context, status *model.MatchStatus, first *int, after *string) (*model.MatchConnection, error)
+	Matches(ctx context.Context, status *model.MatchStatus, competitionID *string, team *string, first *int, after *string) (*model.MatchConnection, error)
 	Match(ctx context.Context, id string) (*model.Match, error)
 	ModelEvaluation(ctx context.Context, modelName *string, modelVersion *string) (*model.EvaluationReport, error)
 }
@@ -618,12 +617,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Health.DatabaseReachable(childComplexity), true
-	case "Health.demoMode":
-		if e.ComplexityRoot.Health.DemoMode == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Health.DemoMode(childComplexity), true
 	case "Health.startedAt":
 		if e.ComplexityRoot.Health.StartedAt == nil {
 			break
@@ -1112,7 +1105,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.Matches(childComplexity, args["status"].(*model.MatchStatus), args["first"].(*int), args["after"].(*string)), true
+		return e.ComplexityRoot.Query.Matches(childComplexity, args["status"].(*model.MatchStatus), args["competitionId"].(*string), args["team"].(*string), args["first"].(*int), args["after"].(*string)), true
 	case "Query.modelEvaluation":
 		if e.ComplexityRoot.Query.ModelEvaluation == nil {
 			break
@@ -1420,8 +1413,6 @@ func (ec *executionContext) childFields_Health(ctx context.Context, field graphq
 		return ec.fieldContext_Health_status(ctx, field)
 	case "databaseReachable":
 		return ec.fieldContext_Health_databaseReachable(ctx, field)
-	case "demoMode":
-		return ec.fieldContext_Health_demoMode(ctx, field)
 	case "version":
 		return ec.fieldContext_Health_version(ctx, field)
 	case "startedAt":
@@ -1797,22 +1788,38 @@ func (ec *executionContext) field_Query_matches_args(ctx context.Context, rawArg
 		return nil, err
 	}
 	args["status"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "first",
-		func(ctx context.Context, v any) (*int, error) {
-			return ec.unmarshalOInt2ᚖint(ctx, v)
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "competitionId",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOID2ᚖstring(ctx, v)
 		})
 	if err != nil {
 		return nil, err
 	}
-	args["first"] = arg1
-	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "after",
+	args["competitionId"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "team",
 		func(ctx context.Context, v any) (*string, error) {
 			return ec.unmarshalOString2ᚖstring(ctx, v)
 		})
 	if err != nil {
 		return nil, err
 	}
-	args["after"] = arg2
+	args["team"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "first",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "after",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg4
 	return args, nil
 }
 
@@ -3310,29 +3317,6 @@ func (ec *executionContext) _Health_databaseReachable(ctx context.Context, field
 	)
 }
 func (ec *executionContext) fieldContext_Health_databaseReachable(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("Health", field, false, false, "Boolean")
-}
-
-func (ec *executionContext) _Health_demoMode(ctx context.Context, field graphql.CollectedField, obj *model.Health) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Health_demoMode(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.DemoMode, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
-			return ec.marshalNBoolean2bool(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_Health_demoMode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Health", field, false, false, "Boolean")
 }
 
@@ -5206,7 +5190,7 @@ func (ec *executionContext) _Query_matches(ctx context.Context, field graphql.Co
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().Matches(ctx, fc.Args["status"].(*model.MatchStatus), fc.Args["first"].(*int), fc.Args["after"].(*string))
+			return ec.Resolvers.Query().Matches(ctx, fc.Args["status"].(*model.MatchStatus), fc.Args["competitionId"].(*string), fc.Args["team"].(*string), fc.Args["first"].(*int), fc.Args["after"].(*string))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *model.MatchConnection) graphql.Marshaler {
@@ -7171,11 +7155,6 @@ func (ec *executionContext) _Health(ctx context.Context, sel ast.SelectionSet, o
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "demoMode":
-			out.Values[i] = ec._Health_demoMode(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
 		case "version":
 			out.Values[i] = ec._Health_version(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -8965,6 +8944,24 @@ func (ec *executionContext) marshalOFloat2ᚖfloat64(ctx context.Context, sel as
 	_ = sel
 	res := graphql.MarshalFloatContext(*v)
 	return graphql.WrapContextMarshaler(ctx, res)
+}
+
+func (ec *executionContext) unmarshalOID2ᚖstring(ctx context.Context, v any) (*string, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := graphql.UnmarshalID(v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOID2ᚖstring(ctx context.Context, sel ast.SelectionSet, v *string) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	_ = sel
+	_ = ctx
+	res := graphql.MarshalID(*v)
+	return res
 }
 
 func (ec *executionContext) unmarshalOInt2ᚖint(ctx context.Context, v any) (*int, error) {

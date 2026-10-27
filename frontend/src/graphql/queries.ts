@@ -38,7 +38,6 @@ export const DASHBOARD_QUERY = gql`
       systemStatus {
         status
         databaseReachable
-        demoMode
         version
         startedAt
       }
@@ -46,9 +45,27 @@ export const DASHBOARD_QUERY = gql`
   }
 `;
 
+export const COMPETITIONS_QUERY = gql`
+  query Competitions {
+    competitions { id name country }
+  }
+`;
+
 export const MATCH_LIST_QUERY = gql`
-  query Matches($status: MatchStatus, $first: Int, $after: String) {
-    matches(status: $status, first: $first, after: $after) {
+  query Matches(
+    $status: MatchStatus
+    $competitionId: ID
+    $team: String
+    $first: Int
+    $after: String
+  ) {
+    matches(
+      status: $status
+      competitionId: $competitionId
+      team: $team
+      first: $first
+      after: $after
+    ) {
       totalCount
       pageInfo { endCursor hasNextPage }
       edges {
@@ -57,7 +74,6 @@ export const MATCH_LIST_QUERY = gql`
           id
           kickoffAt
           status
-          minute
           homeScore
           awayScore
           provenance

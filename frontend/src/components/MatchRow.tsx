@@ -11,6 +11,12 @@ function pct(p: number): string {
   return `${Math.round(p * 100)}%`;
 }
 
+const KICKOFF_FORMAT = new Intl.DateTimeFormat(undefined, {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+});
+
 export function MatchRow({ match, showProbabilities = false }: MatchRowProps) {
   const home = match.homeTeam.shortName ?? match.homeTeam.name;
   const away = match.awayTeam.shortName ?? match.awayTeam.name;
@@ -24,12 +30,16 @@ export function MatchRow({ match, showProbabilities = false }: MatchRowProps) {
         <span>{home}</span>
       </div>
       <div className="match-row__score">
+        <div className="match-row__meta">
+          {match.competition.name} · {KICKOFF_FORMAT.format(new Date(match.kickoffAt))}
+        </div>
         <div className="score">
           {match.homeScore} <span style={{ opacity: 0.4 }}>·</span> {match.awayScore}
         </div>
         <div className="status" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <MatchStatusChip status={match.status} />
-          <ProvenanceChip provenance={match.provenance} />
+          {/* Everything is historical now; only flag the exceptions. */}
+          {match.provenance !== 'HISTORICAL' ? <ProvenanceChip provenance={match.provenance} /> : null}
         </div>
       </div>
       <div className="match-row__team match-row__team--away">

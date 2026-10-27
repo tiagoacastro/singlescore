@@ -6,7 +6,6 @@ package graph
 
 import (
 	"database/sql"
-	"log/slog"
 	"time"
 
 	"github.com/tiagocastro/singlescore/backend/internal/service"
@@ -14,13 +13,10 @@ import (
 
 // Deps holds the collaborators the Resolver needs.
 type Deps struct {
-	Pool        *sql.DB
-	Logger      *slog.Logger
-	Service     *service.Service
-	DemoMode    bool
-	Version     string
-	StartedAt   time.Time
-	DBReachable bool
+	Pool      *sql.DB
+	Service   *service.Service
+	Version   string
+	StartedAt time.Time
 }
 
 // Resolver is the gqlgen root resolver.

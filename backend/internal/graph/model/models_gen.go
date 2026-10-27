@@ -95,7 +95,6 @@ type EvaluationSummary struct {
 type Health struct {
 	Status            string    `json:"status"`
 	DatabaseReachable bool      `json:"databaseReachable"`
-	DemoMode          bool      `json:"demoMode"`
 	Version           string    `json:"version"`
 	StartedAt         time.Time `json:"startedAt"`
 }

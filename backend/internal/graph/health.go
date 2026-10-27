@@ -15,14 +15,7 @@ import (
 // block on each run. Keeping it here keeps the resolver file
 // regenerable without manual re-stitching.
 func (r *queryResolver) buildHealth(ctx context.Context) *model.Health {
-	reachable := r.deps.DBReachable
-	if r.deps.Pool != nil {
-		if err := db.Ping(ctx, r.deps.Pool); err == nil {
-			reachable = true
-		} else {
-			reachable = false
-		}
-	}
+	reachable := db.Ping(ctx, r.deps.Pool) == nil
 	status := "ok"
 	if !reachable {
 		status = "degraded"
@@ -30,7 +23,6 @@ func (r *queryResolver) buildHealth(ctx context.Context) *model.Health {
 	return &model.Health{
 		Status:            status,
 		DatabaseReachable: reachable,
-		DemoMode:          r.deps.DemoMode,
 		Version:           r.deps.Version,
 		StartedAt:         r.deps.StartedAt,
 	}

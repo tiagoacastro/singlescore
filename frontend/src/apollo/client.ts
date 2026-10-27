@@ -5,6 +5,8 @@
 import { ApolloClient, HttpLink, InMemoryCache, from } from '@apollo/client';
 import { onError } from '@apollo/client/link/error';
 
+type MatchConnectionRef = { edges: unknown[] } & Record<string, unknown>;
+
 declare const process: { env: Record<string, string | undefined> };
 
 const endpoint =
@@ -39,7 +41,23 @@ export const apolloClient = new ApolloClient({
   // doesn't include `id`, Apollo embeds the object rather than erroring —
   // which is the right behaviour for lightweight fields like
   // `Team { shortName name }` used purely for display.
-  cache: new InMemoryCache(),
+  cache: new InMemoryCache({
+    typePolicies: {
+      Query: {
+        fields: {
+          // One cached list per filter combination; `fetchMore` pages
+          // (same filters, an `after` cursor) are appended to it.
+          matches: {
+            keyArgs: ['status', 'competitionId', 'team'],
+            merge(existing: MatchConnectionRef | undefined, incoming: MatchConnectionRef, { args }) {
+              if (!existing || !args?.after) return incoming;
+              return { ...incoming, edges: [...existing.edges, ...incoming.edges] };
+            },
+          },
+        },
+      },
+    },
+  }),
   defaultOptions: {
     watchQuery: { fetchPolicy: 'cache-and-network', errorPolicy: 'all' },
     query: { fetchPolicy: 'network-only', errorPolicy: 'all' },

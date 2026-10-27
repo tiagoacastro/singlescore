@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"time"
 
@@ -10,197 +11,205 @@ import (
 	"github.com/tiagocastro/singlescore/backend/internal/repository"
 )
 
-// ModelEvaluation runs the evaluation metrics against all finished
-// matches. When modelName or modelVersion are nil we evaluate every
-// model present and pick the most-represented one for the headline.
+// ModelEvaluation scores the model against every finished match.
+//
+// Full-time snapshots are excluded everywhere: they're written after the
+// final whistle and put ~100% on the known result. The headline,
+// calibration and per-competition rows score the pre-match prediction
+// (comparable with the pre-match market benchmarks and the dashboard);
+// the minute buckets cover the in-play snapshots. modelName and
+// modelVersion optionally restrict which predictions are scored.
 func (s *Service) ModelEvaluation(ctx context.Context, modelName, modelVersion *string) (*model.EvaluationReport, error) {
-	finals, finalByID, matchIDs, err := s.loadFinishedMatches(ctx)
+	finished, err := s.loadFinished(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if len(finals) == 0 {
+	if len(finished.ids) == 0 {
 		return emptyReport(), nil
 	}
-
-	modelPreds, err := s.predictions.ModelForMatches(ctx, matchIDs)
+	modelPreds, err := s.predictions.ModelForMatches(ctx, finished.ids)
 	if err != nil {
 		return nil, err
 	}
-	benchPreds, err := s.predictions.BenchmarkForMatches(ctx, matchIDs)
+	benchPreds, err := s.predictions.BenchmarkForMatches(ctx, finished.ids)
 	if err != nil {
 		return nil, err
 	}
-
-	compByMatch, compMap, err := s.loadCompetitionsForMatches(ctx, matchIDs)
+	comps, err := s.catalog.GetCompetitions(ctx, dedupStrings(finished.competitionIDs()))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("competitions: %w", err)
 	}
 
-	// 1) Model predictions set, optionally filtered by name/version.
-	labeledSet, dateFrom, dateTo := labelModelPredictions(modelPreds, finalByID, modelName, modelVersion)
-	if len(labeledSet) == 0 {
+	scored := scoreModelPredictions(modelPreds, finished.outcome, deref(modelName), deref(modelVersion))
+	if len(scored) == 0 {
 		return emptyReport(), nil
 	}
-
-	// 2) Overall summary.
-	summary := computeSummary(labeledSet, dateFrom, dateTo)
-
-	// 3) Calibration bins (10 bins).
-	calibration := computeCalibrationBins(labeledSet)
-
-	// 4) By minute bucket (pre-match, 0-14, …, 75+).
-	bucketOut := computeMinuteBuckets(labeledSet)
-
-	// 5) By competition (sorted by name for stable output).
-	compOut := computeByCompetition(labeledSet, compByMatch, compMap)
-
-	// 6) Benchmarks grouped by (provider, horizon).
-	benchOut, matchesWithBench := computeBenchmarkGroups(benchPreds, finalByID)
-	sort.Slice(benchOut, func(i, j int) bool { return benchOut[i].Provider < benchOut[j].Provider })
-
-	// Missing benchmark coverage = fraction of finished matches with
-	// zero benchmark forecasts. Clamped to [0, 1] defensively.
-	missing := 1.0 - float64(len(matchesWithBench))/float64(len(finals))
-	if missing < 0 {
-		missing = 0
-	}
-	if missing > 1 {
-		missing = 1
+	var preMatch []scoredPred
+	for _, p := range scored {
+		if p.row.MatchMinute == nil {
+			preMatch = append(preMatch, p)
+		}
 	}
 
+	benchmarks, covered := computeBenchmarkGroups(benchPreds, finished.outcome)
 	return &model.EvaluationReport{
-		Summary:                  summary,
-		Calibration:              calibration,
-		ByMinuteBucket:           bucketOut,
-		ByCompetition:            compOut,
-		Benchmarks:               benchOut,
-		MissingBenchmarkCoverage: missing,
+		Summary:                  computeSummary(preMatch),
+		Calibration:              computeCalibrationBins(preMatch),
+		ByMinuteBucket:           computeMinuteBuckets(scored),
+		ByCompetition:            computeByCompetition(preMatch, finished.competition, comps),
+		Benchmarks:               benchmarks,
+		MissingBenchmarkCoverage: 1 - float64(covered)/float64(len(finished.ids)),
 	}, nil
 }
 
-// loadFinishedMatches returns the final-result list, a (match_id →
-// outcome) index for O(1) lookup, and the slice of match ids.
-func (s *Service) loadFinishedMatches(ctx context.Context) (
-	finals []repository.FinishedMatchFinalResult,
-	finalByID map[string]repository.Outcome,
-	matchIDs []string,
-	err error,
-) {
-	finals, err = s.predictions.AllFinishedResults(ctx)
+// preMatchModelMetrics is the dashboard's headline: the evaluation
+// summary over the pre-match prediction of each finished match. Nil when
+// there's nothing to score.
+func (s *Service) preMatchModelMetrics(ctx context.Context) (*model.EvaluationSummary, error) {
+	finished, err := s.loadFinished(ctx)
+	if err != nil || len(finished.ids) == 0 {
+		return nil, err
+	}
+	byMatch, err := s.predictions.PreMatchModelForMatches(ctx, finished.ids)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
-	finalByID = make(map[string]repository.Outcome, len(finals))
-	matchIDs = make([]string, 0, len(finals))
-	for _, f := range finals {
-		finalByID[f.MatchID] = f.FinalResult
-		matchIDs = append(matchIDs, f.MatchID)
-	}
-	return
-}
-
-// loadCompetitionsForMatches resolves competition rows for a batch of
-// match ids and returns both a (match_id → comp_id) index and the raw
-// (comp_id → competition) map.
-func (s *Service) loadCompetitionsForMatches(ctx context.Context, matchIDs []string) (
-	compByMatch map[string]string,
-	compMap map[string]repository.Competition,
-	err error,
-) {
-	finishedMatches := make([]repository.Match, 0, len(matchIDs))
-	for _, id := range matchIDs {
-		m, mErr := s.matches.GetByID(ctx, id)
-		if mErr != nil {
-			return nil, nil, mErr
-		}
-		if m != nil {
-			finishedMatches = append(finishedMatches, *m)
+	scored := make([]scoredPred, 0, len(byMatch))
+	for id, p := range byMatch {
+		if actual, ok := finished.outcome[id]; ok {
+			scored = append(scored, newScoredPred(p, actual))
 		}
 	}
-	compMap, err = s.catalog.GetCompetitions(ctx, uniqueCompetitionIDs(finishedMatches))
-	if err != nil {
-		return nil, nil, err
-	}
-	compByMatch = make(map[string]string, len(finishedMatches))
-	for _, m := range finishedMatches {
-		compByMatch[m.ID] = m.CompetitionID
-	}
-	return
+	return computeSummary(scored), nil
 }
 
-// labelModelPredictions walks every model prediction for every finished
-// match and converts matching rows into evaluation.Prediction records,
-// also tracking the min/max forecast_at seen (for the summary's date
-// range). Optional modelName/modelVersion restrict the set.
-func labelModelPredictions(
-	modelPreds map[string][]repository.ModelPrediction,
-	finalByID map[string]repository.Outcome,
-	modelName, modelVersion *string,
-) (labeled []labeledPred, dateFrom, dateTo *time.Time) {
-	for matchID, preds := range modelPreds {
-		actual, ok := finalByID[matchID]
+// finishedSet indexes the finished matches being evaluated.
+type finishedSet struct {
+	ids         []string
+	outcome     map[string]repository.Outcome // match id -> result
+	competition map[string]string             // match id -> competition id
+}
+
+func (f finishedSet) competitionIDs() []string {
+	out := make([]string, 0, len(f.competition))
+	for _, cid := range f.competition {
+		out = append(out, cid)
+	}
+	return out
+}
+
+func (s *Service) loadFinished(ctx context.Context) (finishedSet, error) {
+	rows, err := s.matches.Finished(ctx)
+	if err != nil {
+		return finishedSet{}, err
+	}
+	f := finishedSet{
+		ids:         make([]string, 0, len(rows)),
+		outcome:     make(map[string]repository.Outcome, len(rows)),
+		competition: make(map[string]string, len(rows)),
+	}
+	for _, r := range rows {
+		f.ids = append(f.ids, r.ID)
+		f.outcome[r.ID] = r.FinalResult
+		f.competition[r.ID] = r.CompetitionID
+	}
+	return f, nil
+}
+
+// -------------------- scoring --------------------
+
+// scoredPred pairs an evaluation.Prediction with the row it came from,
+// so results can be grouped by model, minute or competition.
+type scoredPred struct {
+	pred evaluation.Prediction
+	row  repository.ModelPrediction
+}
+
+func newScoredPred(p repository.ModelPrediction, actual repository.Outcome) scoredPred {
+	ep := evaluation.Prediction{PHome: p.PHome, PDraw: p.PDraw, PAway: p.PAway, Actual: outcomeFromRepo(actual)}
+	if p.MatchMinute != nil {
+		ep.Minute = *p.MatchMinute
+	}
+	return scoredPred{pred: ep, row: p}
+}
+
+// scoreModelPredictions labels every forecast of a finished match with
+// its result, skipping full-time snapshots (minute >= 90) and, when set,
+// other model names / versions.
+func scoreModelPredictions(
+	byMatch map[string][]repository.ModelPrediction,
+	outcome map[string]repository.Outcome,
+	modelName, modelVersion string,
+) []scoredPred {
+	var out []scoredPred
+	for matchID, preds := range byMatch {
+		actual, ok := outcome[matchID]
 		if !ok {
 			continue
 		}
 		for _, p := range preds {
-			if modelName != nil && *modelName != "" && p.ModelName != *modelName {
+			if (p.MatchMinute != nil && *p.MatchMinute >= 90) ||
+				(modelName != "" && p.ModelName != modelName) ||
+				(modelVersion != "" && p.ModelVersion != modelVersion) {
 				continue
 			}
-			if modelVersion != nil && *modelVersion != "" && p.ModelVersion != *modelVersion {
-				continue
-			}
-			ep := evaluation.Prediction{
-				PHome: p.PHome, PDraw: p.PDraw, PAway: p.PAway,
-				Actual: outcomeFromRepo(actual),
-			}
-			if p.MatchMinute != nil {
-				ep.Minute = *p.MatchMinute
-			}
-			labeled = append(labeled, labeledPred{pred: ep, rep: p})
-			ts := p.ForecastAt
-			if dateFrom == nil || ts.Before(*dateFrom) {
-				t := ts
-				dateFrom = &t
-			}
-			if dateTo == nil || ts.After(*dateTo) {
-				t := ts
-				dateTo = &t
-			}
+			out = append(out, newScoredPred(p, actual))
 		}
 	}
-	return
+	return out
 }
 
-func computeSummary(labeled []labeledPred, dateFrom, dateTo *time.Time) *model.EvaluationSummary {
-	preds := make([]evaluation.Prediction, 0, len(labeled))
-	for _, l := range labeled {
-		preds = append(preds, l.pred)
+func predictionsOf(scored []scoredPred) []evaluation.Prediction {
+	out := make([]evaluation.Prediction, len(scored))
+	for i, s := range scored {
+		out[i] = s.pred
 	}
-	sum, _ := evaluation.Compute(preds)
-	headName, headVersion := pickHeadlineModel(labeled)
+	return out
+}
+
+// computeSummary is the headline metrics block, labelled with the most
+// represented model and the forecast date range. Nil when empty.
+func computeSummary(scored []scoredPred) *model.EvaluationSummary {
+	if len(scored) == 0 {
+		return nil
+	}
+	type modelKey struct{ name, version string }
+	counts := map[modelKey]int{}
+	var head modelKey
+	var from, to time.Time
+	for i, s := range scored {
+		k := modelKey{s.row.ModelName, s.row.ModelVersion}
+		counts[k]++
+		if counts[k] > counts[head] {
+			head = k
+		}
+		if t := s.row.ForecastAt; i == 0 || t.Before(from) {
+			from = t
+		}
+		if t := s.row.ForecastAt; i == 0 || t.After(to) {
+			to = t
+		}
+	}
+	sum, _ := evaluation.Compute(predictionsOf(scored))
 	return &model.EvaluationSummary{
-		ModelName:     headName,
-		ModelVersion:  headVersion,
+		ModelName:     head.name,
+		ModelVersion:  head.version,
 		SampleSize:    sum.SampleSize,
 		BrierScore:    sum.BrierScore,
 		LogLoss:       sum.LogLoss,
 		Accuracy:      sum.Accuracy,
-		DateRangeFrom: dateFrom,
-		DateRangeTo:   dateTo,
+		DateRangeFrom: &from,
+		DateRangeTo:   &to,
 	}
 }
 
-func computeCalibrationBins(labeled []labeledPred) []*model.CalibrationBin {
-	preds := make([]evaluation.Prediction, 0, len(labeled))
-	for _, l := range labeled {
-		preds = append(preds, l.pred)
-	}
-	bins := evaluation.Calibration(preds, 10)
+func computeCalibrationBins(scored []scoredPred) []*model.CalibrationBin {
+	bins := evaluation.Calibration(predictionsOf(scored), 10)
 	out := make([]*model.CalibrationBin, 0, len(bins))
 	for _, b := range bins {
-		b := b
 		out = append(out, &model.CalibrationBin{
-			BinLow: b.BinLow, BinHigh: b.BinHigh,
+			BinLow:            b.BinLow,
+			BinHigh:           b.BinHigh,
 			AvgPredicted:      b.AvgPredicted,
 			ObservedFrequency: b.ObservedFrequency,
 			SampleSize:        b.SampleSize,
@@ -209,223 +218,114 @@ func computeCalibrationBins(labeled []labeledPred) []*model.CalibrationBin {
 	return out
 }
 
-func computeMinuteBuckets(labeled []labeledPred) []*model.MinuteBucketMetric {
+func computeMinuteBuckets(scored []scoredPred) []*model.MinuteBucketMetric {
 	byBucket := map[string][]evaluation.Prediction{}
-	for _, l := range labeled {
-		byBucket[evaluation.MinuteBucket(l.pred.Minute)] = append(byBucket[evaluation.MinuteBucket(l.pred.Minute)], l.pred)
+	for _, s := range scored {
+		b := evaluation.MinuteBucket(s.pred.Minute)
+		byBucket[b] = append(byBucket[b], s.pred)
 	}
 	out := make([]*model.MinuteBucketMetric, 0, len(byBucket))
-	for _, name := range orderedBucketNames() {
+	for _, name := range evaluation.MinuteBuckets {
 		ps, ok := byBucket[name]
 		if !ok {
 			continue
 		}
-		s, _ := evaluation.Compute(ps)
+		sum, _ := evaluation.Compute(ps)
 		out = append(out, &model.MinuteBucketMetric{
 			MinuteBucket: name,
-			BrierScore:   s.BrierScore,
-			LogLoss:      s.LogLoss,
-			SampleSize:   s.SampleSize,
+			BrierScore:   sum.BrierScore,
+			LogLoss:      sum.LogLoss,
+			SampleSize:   sum.SampleSize,
 		})
 	}
 	return out
 }
 
 func computeByCompetition(
-	labeled []labeledPred,
-	compByMatch map[string]string,
-	compMap map[string]repository.Competition,
+	scored []scoredPred, compByMatch map[string]string, comps map[string]repository.Competition,
 ) []*model.CompetitionMetric {
 	byComp := map[string][]evaluation.Prediction{}
-	for _, l := range labeled {
-		cid, ok := compByMatch[l.rep.MatchID]
-		if !ok {
-			continue
+	for _, s := range scored {
+		if cid, ok := compByMatch[s.row.MatchID]; ok {
+			byComp[cid] = append(byComp[cid], s.pred)
 		}
-		byComp[cid] = append(byComp[cid], l.pred)
 	}
 	out := make([]*model.CompetitionMetric, 0, len(byComp))
 	for cid, ps := range byComp {
-		comp, ok := compMap[cid]
+		comp, ok := comps[cid]
 		if !ok {
 			continue
 		}
-		s, _ := evaluation.Compute(ps)
+		sum, _ := evaluation.Compute(ps)
 		out = append(out, &model.CompetitionMetric{
 			Competition: toCompetitionModel(comp),
-			BrierScore:  s.BrierScore,
-			LogLoss:     s.LogLoss,
-			SampleSize:  s.SampleSize,
+			BrierScore:  sum.BrierScore,
+			LogLoss:     sum.LogLoss,
+			SampleSize:  sum.SampleSize,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Competition.Name < out[j].Competition.Name })
 	return out
 }
 
-// computeBenchmarkGroups returns the grouped (provider, horizon)
-// summaries plus the set of match ids that have at least one benchmark
-// prediction (used by the caller to compute MissingBenchmarkCoverage).
+// computeBenchmarkGroups scores benchmark forecasts grouped by
+// (provider, horizon), and counts the finished matches that have at
+// least one benchmark.
 func computeBenchmarkGroups(
-	benchPreds map[string][]repository.BenchmarkPrediction,
-	finalByID map[string]repository.Outcome,
-) ([]*model.BenchmarkEvaluationSummary, map[string]struct{}) {
-	type bkey struct{ provider, horizon string }
-	groups := map[bkey][]evaluation.Prediction{}
-	matchesWithBench := map[string]struct{}{}
-	for matchID, bs := range benchPreds {
-		actual, ok := finalByID[matchID]
-		if !ok {
+	byMatch map[string][]repository.BenchmarkPrediction, outcome map[string]repository.Outcome,
+) (out []*model.BenchmarkEvaluationSummary, covered int) {
+	type groupKey struct{ provider, horizon string }
+	groups := map[groupKey][]evaluation.Prediction{}
+	for matchID, bs := range byMatch {
+		actual, ok := outcome[matchID]
+		if !ok || len(bs) == 0 {
 			continue
 		}
-		if len(bs) > 0 {
-			matchesWithBench[matchID] = struct{}{}
-		}
+		covered++
 		for _, b := range bs {
-			ep := evaluation.Prediction{
-				PHome: b.PHome, PDraw: b.PDraw, PAway: b.PAway,
-				Actual: outcomeFromRepo(actual),
-			}
+			ep := evaluation.Prediction{PHome: b.PHome, PDraw: b.PDraw, PAway: b.PAway, Actual: outcomeFromRepo(actual)}
 			if b.MatchMinute != nil {
 				ep.Minute = *b.MatchMinute
 			}
-			groups[bkey{b.Provider, b.Horizon}] = append(groups[bkey{b.Provider, b.Horizon}], ep)
+			k := groupKey{b.Provider, b.Horizon}
+			groups[k] = append(groups[k], ep)
 		}
 	}
-	out := make([]*model.BenchmarkEvaluationSummary, 0, len(groups))
+	out = make([]*model.BenchmarkEvaluationSummary, 0, len(groups))
 	for k, ps := range groups {
-		s, _ := evaluation.Compute(ps)
+		sum, _ := evaluation.Compute(ps)
 		out = append(out, &model.BenchmarkEvaluationSummary{
 			Provider:   k.provider,
 			Horizon:    model.BenchmarkHorizon(k.horizon),
-			SampleSize: s.SampleSize,
-			BrierScore: s.BrierScore,
-			LogLoss:    s.LogLoss,
-			Accuracy:   s.Accuracy,
+			SampleSize: sum.SampleSize,
+			BrierScore: sum.BrierScore,
+			LogLoss:    sum.LogLoss,
+			Accuracy:   sum.Accuracy,
 		})
 	}
-	return out, matchesWithBench
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Provider != out[j].Provider {
+			return out[i].Provider < out[j].Provider
+		}
+		return out[i].Horizon < out[j].Horizon
+	})
+	return out, covered
 }
 
-// -------------------- dashboard metrics --------------------
+// -------------------- helpers --------------------
 
-// preMatchModelMetrics computes a Brier/log-loss summary over the
-// pre-match prediction per finished match, used by the dashboard
-// mini-metrics panel. Scoring a later snapshot would flatter the model
-// (the full-time row already knows the result). Returns nil when
-// there's nothing to score.
-func (s *Service) preMatchModelMetrics(ctx context.Context) (*model.EvaluationSummary, error) {
-	finals, err := s.predictions.AllFinishedResults(ctx)
-	if err != nil {
-		return nil, err
+func deref(s *string) string {
+	if s == nil {
+		return ""
 	}
-	if len(finals) == 0 {
-		return nil, nil
-	}
-	ids := make([]string, 0, len(finals))
-	finalBy := make(map[string]repository.Outcome, len(finals))
-	for _, f := range finals {
-		ids = append(ids, f.MatchID)
-		finalBy[f.MatchID] = f.FinalResult
-	}
-	preMatchByMatch, err := s.predictions.PreMatchModelForMatches(ctx, ids)
-	if err != nil {
-		return nil, err
-	}
-	if len(preMatchByMatch) == 0 {
-		return nil, nil
-	}
-	var preds []evaluation.Prediction
-	var modelName, modelVersion string
-	var dateFrom, dateTo *time.Time
-	for mid, p := range preMatchByMatch {
-		actual, ok := finalBy[mid]
-		if !ok {
-			continue
-		}
-		preds = append(preds, evaluation.Prediction{
-			PHome: p.PHome, PDraw: p.PDraw, PAway: p.PAway,
-			Actual: outcomeFromRepo(actual),
-		})
-		if modelName == "" {
-			modelName = p.ModelName
-			modelVersion = p.ModelVersion
-		}
-		if dateFrom == nil || p.ForecastAt.Before(*dateFrom) {
-			t := p.ForecastAt
-			dateFrom = &t
-		}
-		if dateTo == nil || p.ForecastAt.After(*dateTo) {
-			t := p.ForecastAt
-			dateTo = &t
-		}
-	}
-	if len(preds) == 0 {
-		return nil, nil
-	}
-	sum, _ := evaluation.Compute(preds)
-	return &model.EvaluationSummary{
-		ModelName:     modelName,
-		ModelVersion:  modelVersion,
-		SampleSize:    sum.SampleSize,
-		BrierScore:    sum.BrierScore,
-		LogLoss:       sum.LogLoss,
-		Accuracy:      sum.Accuracy,
-		DateRangeFrom: dateFrom,
-		DateRangeTo:   dateTo,
-	}, nil
-}
-
-// -------------------- evaluation helpers --------------------
-
-// labeledPred pairs an evaluation.Prediction with its raw repository
-// row so grouping by model name/version or competition can be done
-// after Compute.
-type labeledPred struct {
-	pred evaluation.Prediction
-	rep  repository.ModelPrediction
-}
-
-func pickHeadlineModel(labeled []labeledPred) (name, version string) {
-	type key struct{ n, v string }
-	counts := map[key]int{}
-	for _, l := range labeled {
-		counts[key{n: l.rep.ModelName, v: l.rep.ModelVersion}]++
-	}
-	var best key
-	bestN := -1
-	for k, n := range counts {
-		if n > bestN {
-			best, bestN = k, n
-		}
-	}
-	return best.n, best.v
-}
-
-func orderedBucketNames() []string {
-	return []string{"pre-match", "0-14", "15-29", "30-44", "45-59", "60-74", "75+"}
-}
-
-func uniqueCompetitionIDs(ms []repository.Match) []string {
-	seen := map[string]struct{}{}
-	out := make([]string, 0, len(ms))
-	for _, m := range ms {
-		if _, ok := seen[m.CompetitionID]; ok {
-			continue
-		}
-		seen[m.CompetitionID] = struct{}{}
-		out = append(out, m.CompetitionID)
-	}
-	return out
+	return *s
 }
 
 func dedupStrings(in []string) []string {
 	seen := map[string]struct{}{}
 	out := make([]string, 0, len(in))
 	for _, s := range in {
-		if s == "" {
-			continue
-		}
-		if _, ok := seen[s]; ok {
+		if _, ok := seen[s]; s == "" || ok {
 			continue
 		}
 		seen[s] = struct{}{}
@@ -438,8 +338,6 @@ func outcomeFromRepo(o repository.Outcome) evaluation.Outcome {
 	switch o {
 	case repository.OutcomeHome:
 		return evaluation.OutcomeHome
-	case repository.OutcomeDraw:
-		return evaluation.OutcomeDraw
 	case repository.OutcomeAway:
 		return evaluation.OutcomeAway
 	}
@@ -448,11 +346,9 @@ func outcomeFromRepo(o repository.Outcome) evaluation.Outcome {
 
 func emptyReport() *model.EvaluationReport {
 	return &model.EvaluationReport{
-		Summary:                  nil,
-		Calibration:              []*model.CalibrationBin{},
-		ByMinuteBucket:           []*model.MinuteBucketMetric{},
-		ByCompetition:            []*model.CompetitionMetric{},
-		Benchmarks:               []*model.BenchmarkEvaluationSummary{},
-		MissingBenchmarkCoverage: 0,
+		Calibration:    []*model.CalibrationBin{},
+		ByMinuteBucket: []*model.MinuteBucketMetric{},
+		ByCompetition:  []*model.CompetitionMetric{},
+		Benchmarks:     []*model.BenchmarkEvaluationSummary{},
 	}
 }

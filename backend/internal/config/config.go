@@ -14,7 +14,6 @@ import (
 type Config struct {
 	HTTPAddr     string
 	LogLevel     string
-	DemoMode     bool
 	CORSOrigins  []string
 	BuildVersion string
 
@@ -35,7 +34,6 @@ func Load() (Config, error) {
 	cfg := Config{
 		HTTPAddr:     getEnv("BACKEND_HTTP_ADDR", ":8080"),
 		LogLevel:     getEnv("BACKEND_LOG_LEVEL", "info"),
-		DemoMode:     getBoolEnv("BACKEND_DEMO_MODE", true),
 		CORSOrigins:  splitAndTrim(getEnv("BACKEND_CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")),
 		BuildVersion: getEnv("BACKEND_BUILD_VERSION", "dev"),
 	}
@@ -65,21 +63,6 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
-}
-
-func getBoolEnv(key string, fallback bool) bool {
-	v, ok := os.LookupEnv(key)
-	if !ok {
-		return fallback
-	}
-	switch strings.ToLower(strings.TrimSpace(v)) {
-	case "1", "true", "yes", "on":
-		return true
-	case "0", "false", "no", "off", "":
-		return false
-	default:
-		return fallback
-	}
 }
 
 func splitAndTrim(csv string) []string {

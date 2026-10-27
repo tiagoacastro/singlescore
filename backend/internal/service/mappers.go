@@ -1,8 +1,6 @@
 package service
 
 import (
-	"strings"
-
 	"github.com/tiagocastro/singlescore/backend/internal/graph/model"
 	"github.com/tiagocastro/singlescore/backend/internal/repository"
 )
@@ -31,9 +29,9 @@ func toTeamModel(t repository.Team) *model.Team {
 	}
 }
 
-// toMatchModel builds the gqlgen Match using pre-fetched competition and
-// team maps so there's no per-row DB round-trip. Returned with empty
-// slices for the (lazily-populated) child collections.
+// toMatchModel builds the gqlgen Match from pre-fetched competition and
+// team maps (no per-row DB round-trip). Child collections start empty;
+// only the match detail view fills them.
 func toMatchModel(r repository.Match, comps map[string]repository.Competition, teams map[string]repository.Team) *model.Match {
 	var finalResult *model.Outcome
 	if r.FinalResult != nil {
@@ -124,8 +122,8 @@ func toBenchmarkModel(b repository.BenchmarkPrediction) *model.BenchmarkPredicti
 	return &model.BenchmarkPrediction{
 		ID:          b.ID,
 		Provider:    b.Provider,
-		SourceType:  model.BenchmarkSourceType(strings.ToUpper(b.SourceType)),
-		Horizon:     model.BenchmarkHorizon(strings.ToUpper(b.Horizon)),
+		SourceType:  model.BenchmarkSourceType(b.SourceType),
+		Horizon:     model.BenchmarkHorizon(b.Horizon),
 		ForecastAt:  b.ForecastAt,
 		MatchMinute: b.MatchMinute,
 		PHome:       b.PHome,

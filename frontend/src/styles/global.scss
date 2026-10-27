@@ -121,6 +121,65 @@
   }
 }
 
+// Vertical rhythm for lists of cards / rows.
+.stack {
+  display: grid;
+  gap: $space-6;
+
+  &--tight { gap: $space-2; }
+}
+
+// Filters above a list (Matches page).
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: $space-4;
+  margin-bottom: $space-5;
+
+  &__clear {
+    height: 38px;
+    cursor: pointer;
+  }
+}
+
+.field {
+  display: grid;
+  gap: $space-1;
+  min-width: 200px;
+
+  &--grow { flex: 1 1 260px; }
+
+  &__label {
+    font-size: $fs-xs;
+    color: $color-text-muted;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  &__control {
+    height: 38px;
+    padding: 0 $space-3;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    background: $color-bg-surface;
+    color: $color-text-primary;
+    font: inherit;
+
+    &:hover { border-color: $color-bg-hover; }
+    &:focus-visible { @include focus-ring; }
+    &::placeholder { color: $color-text-muted; }
+  }
+}
+
+.load-more {
+  display: block;
+  margin: $space-4 auto 0;
+  cursor: pointer;
+
+  &:disabled { opacity: 0.6; cursor: progress; }
+}
+
 // Match detail: panels stacked on the left, event timeline on the right
 // growing to its own height instead of stretching the panels beside it.
 .match-layout {
@@ -183,6 +242,13 @@
   transition: background $motion-base $ease-standard, border-color $motion-base $ease-standard;
 
   &:hover { background: $color-bg-hover; border-color: $color-border; }
+  &:focus-visible { @include focus-ring; }
+
+  &__meta {
+    font-size: $fs-xs;
+    color: $color-text-muted;
+    white-space: nowrap;
+  }
 
   &__team {
     display: flex;

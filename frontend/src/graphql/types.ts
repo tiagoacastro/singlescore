@@ -118,7 +118,6 @@ export interface MatchStats {
 export interface Health {
   status: string;
   databaseReachable: boolean;
-  demoMode: boolean;
   version: string;
   startedAt: string;
 }

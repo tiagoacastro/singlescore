@@ -2,14 +2,12 @@ import { NavLink } from 'react-router-dom';
 import { useQuery } from '@apollo/client';
 import { gql } from '@apollo/client';
 import type { Health } from '@/graphql/types';
-import { ProvenanceChip } from './Chip';
 
 const SYSTEM_STATUS_QUERY = gql`
   query SystemStatus {
     health {
       status
       databaseReachable
-      demoMode
       version
     }
   }
@@ -17,7 +15,6 @@ const SYSTEM_STATUS_QUERY = gql`
 
 export function Nav() {
   const { data } = useQuery<{ health: Health }>(SYSTEM_STATUS_QUERY, {
-    pollInterval: 15000,
     fetchPolicy: 'cache-and-network',
     errorPolicy: 'all',
   });
@@ -52,7 +49,6 @@ export function Nav() {
         </nav>
         <div className="nav__spacer" />
         <div className="nav__status" role="status" aria-live="polite">
-          {health?.demoMode ? <ProvenanceChip provenance="DEMO" /> : null}
           <span>
             db:{' '}
             <strong style={{ color: health?.databaseReachable ? '#38d996' : '#ff5a68' }}>

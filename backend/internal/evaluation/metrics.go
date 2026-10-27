@@ -37,11 +37,11 @@ type Prediction struct {
 
 // Summary is an aggregate evaluation of many predictions.
 type Summary struct {
-	SampleSize  int
-	BrierScore  float64 // mean multiclass Brier (lower is better)
-	LogLoss     float64 // mean multiclass log loss (lower is better)
-	Accuracy    float64 // argmax == actual
-	Correct     int
+	SampleSize int
+	BrierScore float64 // mean multiclass Brier (lower is better)
+	LogLoss    float64 // mean multiclass log loss (lower is better)
+	Accuracy   float64 // argmax == actual
+	Correct    int
 }
 
 const (
@@ -230,6 +230,9 @@ func Calibration(preds []Prediction, nBins int) []CalibrationBin {
 	sort.Slice(bins, func(i, j int) bool { return bins[i].BinLow < bins[j].BinLow })
 	return bins
 }
+
+// MinuteBuckets lists MinuteBucket's labels in match order.
+var MinuteBuckets = []string{"pre-match", "0-14", "15-29", "30-44", "45-59", "60-74", "75+"}
 
 // MinuteBucket returns a coarse bucket name for a forecast minute.
 func MinuteBucket(minute int) string {

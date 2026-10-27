@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Dashboard', () => {
-  test('renders DEMO badge, headline model metrics, and recent finished matches', async ({ page }) => {
+  test('renders headline model metrics and recent finished matches', async ({ page }) => {
     await page.goto('/');
     await expect(page).toHaveTitle(/SingleScore/);
 
@@ -17,9 +17,6 @@ test.describe('Dashboard', () => {
     await expect(metricValues).toHaveCount(3);
     await expect(metricValues.nth(0)).not.toHaveText('—', { timeout: 15_000 });
     await expect(metricValues.nth(1)).not.toHaveText('—', { timeout: 15_000 });
-
-    // DEMO chip is present in the page header meta (backend reports demoMode=true).
-    await expect(page.locator('.chip', { hasText: 'DEMO' }).first()).toBeVisible();
 
     // At least one finished match row visible, with its pre-match odds.
     const recentSection = page.getByRole('region', { name: 'Recent matches' });

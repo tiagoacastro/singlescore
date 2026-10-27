@@ -12,7 +12,17 @@ type Query {
   health: Health!
   dashboard: Dashboard!
   competitions: [Competition!]!
-  matches(status: MatchStatus, first: Int = 20, after: String): MatchConnection!
+  """
+  Matches newest first. `competitionId` filters to one competition;
+  `team` matches either team's name (case-insensitive substring).
+  """
+  matches(
+    status: MatchStatus
+    competitionId: ID
+    team: String
+    first: Int = 20
+    after: String
+  ): MatchConnection!
   match(id: ID!): Match
   modelEvaluation(modelName: String, modelVersion: String): EvaluationReport!
 }
@@ -20,7 +30,6 @@ type Query {
 type Health {
   status: String!
   databaseReachable: Boolean!
-  demoMode: Boolean!
   version: String!
   startedAt: Time!
 }

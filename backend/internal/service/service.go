@@ -7,16 +7,14 @@
 //
 // Files in this package:
 //
-//   - service.go    — Service type, lifecycle, Dashboard, Competitions,
+//   - service.go    — Service type, Dashboard, Competitions,
 //     Matches list, single Match hydration.
-//   - evaluation.go — ModelEvaluation + metrics helpers.
+//   - evaluation.go — ModelEvaluation + dashboard metrics.
 //   - mappers.go    — repository → gqlgen model converters.
 package service
 
 import (
 	"context"
-	"encoding/base64"
-	"errors"
 	"fmt"
 	"time"
 
@@ -41,9 +39,6 @@ func New(cat *repository.Catalog, m *repository.Matches, p *repository.Predictio
 		ingestion:   i,
 	}
 }
-
-// ErrServiceNotReady is returned when a required collaborator is missing.
-var ErrServiceNotReady = errors.New("service: not initialised")
 
 // -------------------- Dashboard --------------------
 
@@ -86,7 +81,6 @@ func (s *Service) loadDataSourceStatus(ctx context.Context) ([]*model.DataSource
 	}
 	ds := make([]*model.DataSourceStatus, 0, len(runs))
 	for _, r := range runs {
-		r := r
 		var lastRun *time.Time
 		if !r.StartedAt.IsZero() {
 			t := r.StartedAt
@@ -116,7 +110,6 @@ func (s *Service) Competitions(ctx context.Context) ([]*model.Competition, error
 	}
 	out := make([]*model.Competition, 0, len(comps))
 	for _, c := range comps {
-		c := c
 		out = append(out, toCompetitionModel(c))
 	}
 	return out, nil
@@ -124,12 +117,18 @@ func (s *Service) Competitions(ctx context.Context) ([]*model.Competition, error
 
 // -------------------- Matches (list + detail) --------------------
 
-// Matches runs a paged match query and hydrates the results.
-func (s *Service) Matches(ctx context.Context, status *model.MatchStatus, first *int, after *string) (*model.MatchConnection, error) {
+// Matches runs a paged, filtered match query and hydrates the results.
+func (s *Service) Matches(ctx context.Context, status *model.MatchStatus, competitionID, team *string, first *int, after *string) (*model.MatchConnection, error) {
 	var filter repository.MatchFilter
 	if status != nil {
 		rs := repository.MatchStatus(*status)
 		filter.Status = &rs
+	}
+	if competitionID != nil {
+		filter.CompetitionID = *competitionID
+	}
+	if team != nil {
+		filter.Team = *team
 	}
 	if first != nil {
 		filter.First = *first
@@ -148,7 +147,7 @@ func (s *Service) Matches(ctx context.Context, status *model.MatchStatus, first 
 
 	edges := make([]*model.MatchEdge, 0, len(models))
 	for i, m := range models {
-		edges = append(edges, &model.MatchEdge{Node: m, Cursor: cursorFromMatch(page.Matches[i])})
+		edges = append(edges, &model.MatchEdge{Node: m, Cursor: repository.EncodeCursor(page.Matches[i])})
 	}
 	var endCursor *string
 	if page.EndCursor != "" {
@@ -209,19 +208,15 @@ func (s *Service) hydrateMatchDetail(ctx context.Context, raw repository.Match) 
 
 	m := toMatchModel(raw, compMap, teamMap)
 	for _, e := range events[raw.ID] {
-		e := e
 		m.Events = append(m.Events, toEventModel(e))
 	}
 	for _, c := range commentary[raw.ID] {
-		c := c
 		m.Commentary = append(m.Commentary, toMatchCommentaryModel(c))
 	}
 	for _, p := range modelPreds[raw.ID] {
-		p := p
 		m.ModelPredictions = append(m.ModelPredictions, toModelPredictionModel(p))
 	}
 	for _, b := range benchPreds[raw.ID] {
-		b := b
 		m.BenchmarkPredictions = append(m.BenchmarkPredictions, toBenchmarkModel(b))
 	}
 	if s, ok := stats[raw.ID]; ok {
@@ -275,7 +270,6 @@ func (s *Service) hydrateMatches(ctx context.Context, raws []repository.Match) (
 	}
 	out := make([]*model.Match, 0, len(raws))
 	for _, r := range raws {
-		r := r
 		m := toMatchModel(r, comps, teams)
 		if pp, ok := preMatch[r.ID]; ok {
 			m.PreMatchPrediction = toModelPredictionModel(pp)
@@ -283,11 +277,4 @@ func (s *Service) hydrateMatches(ctx context.Context, raws []repository.Match) (
 		out = append(out, m)
 	}
 	return out, nil
-}
-
-// cursorFromMatch rebuilds the opaque cursor for a match row. We reuse
-// the repository's cursor shape (base64 of RFC3339Nano|id).
-func cursorFromMatch(m repository.Match) string {
-	raw := m.KickoffAt.UTC().Format(time.RFC3339Nano) + "|" + m.ID
-	return base64.RawURLEncoding.EncodeToString([]byte(raw))
 }

@@ -1,9 +1,11 @@
-import { useQuery } from '@apollo/client';
-import { useState } from 'react';
-import { MATCH_LIST_QUERY } from '@/graphql/queries';
-import type { Match, MatchStatus } from '@/graphql/types';
+import { NetworkStatus, useQuery } from '@apollo/client';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { COMPETITIONS_QUERY, MATCH_LIST_QUERY } from '@/graphql/queries';
+import type { Competition, Match } from '@/graphql/types';
 import { EmptyState } from '@/components/EmptyState';
 import { MatchRow } from '@/components/MatchRow';
+import { useDebouncedValue } from '@/lib/useDebouncedValue';
 
 interface MatchesData {
   matches: {
@@ -13,78 +15,131 @@ interface MatchesData {
   };
 }
 
-const STATUS_FILTERS: { label: string; value: MatchStatus | null }[] = [
-  { label: 'All', value: null },
-  { label: 'Scheduled', value: 'SCHEDULED' },
-  { label: 'Finished', value: 'FINISHED' },
-];
+const PAGE_SIZE = 20;
 
+// Filters live in the URL (?competition=&team=) so they survive opening a
+// match and coming back.
 export function MatchesPage() {
-  const [status, setStatus] = useState<MatchStatus | null>(null);
-  const { data, loading, error, fetchMore } = useQuery<MatchesData>(MATCH_LIST_QUERY, {
-    variables: { status, first: 20 },
-    errorPolicy: 'all',
-  });
+  const [params, setParams] = useSearchParams();
+  const competitionId = params.get('competition') || null;
+  const [teamInput, setTeamInput] = useState(params.get('team') ?? '');
+  const team = useDebouncedValue(teamInput.trim(), 300);
+
+  const setParam = (key: string, value: string | null) =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (value) next.set(key, value);
+        else next.delete(key);
+        return next;
+      },
+      { replace: true },
+    );
+
+  useEffect(() => {
+    if (team !== (params.get('team') ?? '')) setParam('team', team || null);
+    // Only the debounced input writes the URL.
+  }, [team]);
+
+  const { data: compData } = useQuery<{ competitions: Competition[] }>(COMPETITIONS_QUERY);
+  const { data, loading, error, fetchMore, networkStatus } = useQuery<MatchesData>(
+    MATCH_LIST_QUERY,
+    {
+      variables: { competitionId, team: team || null, first: PAGE_SIZE },
+      errorPolicy: 'all',
+      notifyOnNetworkStatusChange: true,
+    },
+  );
+  const matches = data?.matches;
+  const loadingMore = networkStatus === NetworkStatus.fetchMore;
+  const filtered = Boolean(competitionId || team);
 
   return (
     <>
       <header className="page-header">
         <h1>Matches</h1>
-        <div className="page-header__meta">
-          {STATUS_FILTERS.map((f) => (
-            <button
-              key={f.label}
-              className={`chip${status === f.value ? ' chip--demo' : ''}`}
-              onClick={() => setStatus(f.value)}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
       </header>
 
-      {error ? (
-        <div className="error-banner">GraphQL error: {error.message}</div>
-      ) : null}
+      <div className="filter-bar" role="search">
+        <label className="field">
+          <span className="field__label">Competition</span>
+          <select
+            className="field__control"
+            value={competitionId ?? ''}
+            onChange={(e) => setParam('competition', e.target.value || null)}
+          >
+            <option value="">All competitions</option>
+            {compData?.competitions.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+                {c.country ? ` (${c.country})` : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field field--grow">
+          <span className="field__label">Team</span>
+          <input
+            className="field__control"
+            type="search"
+            placeholder="Search by team name"
+            value={teamInput}
+            onChange={(e) => setTeamInput(e.target.value)}
+          />
+        </label>
+        {filtered ? (
+          <button
+            type="button"
+            className="chip filter-bar__clear"
+            onClick={() => {
+              setTeamInput('');
+              setParams(new URLSearchParams(), { replace: true });
+            }}
+          >
+            Clear filters
+          </button>
+        ) : null}
+      </div>
+
+      {error ? <div className="error-banner">GraphQL error: {error.message}</div> : null}
 
       <section className="card">
         <div className="card__header">
           <h2>Match list</h2>
           <span className="card__subtitle">
-            {data?.matches.totalCount ?? 0} total
+            {matches ? `${matches.edges.length} of ${matches.totalCount}` : '…'}
           </span>
         </div>
-        {loading && !data ? (
+        {loading && !matches ? (
           <>
             <div className="skeleton skeleton--row" />
             <div className="skeleton skeleton--row" />
             <div className="skeleton skeleton--row" />
           </>
-        ) : data?.matches.edges.length ? (
+        ) : matches?.edges.length ? (
           <>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {data.matches.edges.map((e) => (
+            <div className="stack stack--tight">
+              {matches.edges.map((e) => (
                 <MatchRow key={e.node.id} match={e.node} showProbabilities />
               ))}
             </div>
-            {data.matches.pageInfo.hasNextPage ? (
+            {matches.pageInfo.hasNextPage ? (
               <button
-                className="chip"
-                style={{ alignSelf: 'center', marginTop: 12 }}
+                type="button"
+                className="chip load-more"
+                disabled={loadingMore}
                 onClick={() =>
-                  fetchMore({
-                    variables: { after: data.matches.pageInfo.endCursor },
-                  })
+                  fetchMore({ variables: { after: matches.pageInfo.endCursor } })
                 }
               >
-                Load more
+                {loadingMore ? 'Loading…' : `Load more (${matches.totalCount - matches.edges.length} left)`}
               </button>
             ) : null}
           </>
         ) : (
           <EmptyState
-            title="No matches match this filter"
-            description="Try switching the filter above."
+            title="No matches found"
+            description={filtered ? 'Try another competition or team name.' : undefined}
           />
         )}
       </section>

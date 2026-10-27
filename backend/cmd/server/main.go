@@ -8,6 +8,7 @@ package main
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,8 +16,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/handler"
+	"github.com/99designs/gqlgen/graphql/handler/extension"
+	"github.com/99designs/gqlgen/graphql/handler/lru"
+	"github.com/99designs/gqlgen/graphql/handler/transport"
 	"github.com/99designs/gqlgen/graphql/playground"
+	"github.com/vektah/gqlparser/v2/ast"
+	"github.com/vektah/gqlparser/v2/gqlerror"
 
 	"github.com/tiagocastro/singlescore/backend/internal/config"
 	"github.com/tiagocastro/singlescore/backend/internal/db"
@@ -34,11 +41,7 @@ func main() {
 		os.Exit(2)
 	}
 	logger := logging.New(cfg.LogLevel)
-	logger.Info("starting singlescore backend",
-		"version", cfg.BuildVersion,
-		"addr", cfg.HTTPAddr,
-		"demo_mode", cfg.DemoMode,
-	)
+	logger.Info("starting singlescore backend", "version", cfg.BuildVersion, "addr", cfg.HTTPAddr)
 
 	pool, err := db.Open(cfg.DB)
 	if err != nil {
@@ -49,9 +52,8 @@ func main() {
 
 	startupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	dbReachable := true
 	if err := db.Ping(startupCtx, pool); err != nil {
-		dbReachable = false
+		// Health re-pings per request, so the API recovers on its own.
 		logger.Warn("db ping failed; continuing in degraded mode", "err", err)
 	} else {
 		logger.Info("db connected", "host", cfg.DB.Host, "db", cfg.DB.Database)
@@ -64,25 +66,20 @@ func main() {
 	svc := service.New(catalogRepo, matchesRepo, predsRepo, ingestRepo)
 
 	resolver := graph.NewResolver(graph.Deps{
-		Pool:        pool,
-		Logger:      logger,
-		Service:     svc,
-		DemoMode:    cfg.DemoMode,
-		Version:     cfg.BuildVersion,
-		StartedAt:   time.Now().UTC(),
-		DBReachable: dbReachable,
+		Pool:      pool,
+		Service:   svc,
+		Version:   cfg.BuildVersion,
+		StartedAt: time.Now().UTC(),
 	})
-
-	gqlHandler := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: resolver}))
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok\n"))
 	})
-	mux.Handle("/graphql", gqlHandler)
-	// Playground is handy locally; we only enable it in non-production.
-	if strings.ToLower(cfg.LogLevel) == "debug" || cfg.DemoMode {
+	mux.Handle("/graphql", newGraphQLHandler(graph.NewExecutableSchema(graph.Config{Resolvers: resolver}), logger))
+	// The Playground is a local-debugging aid only.
+	if strings.EqualFold(cfg.LogLevel, "debug") {
 		mux.Handle("/", playground.Handler("SingleScore GraphQL", "/graphql"))
 	}
 
@@ -106,11 +103,13 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 
+	exitCode := 0
 	select {
 	case sig := <-stop:
 		logger.Info("shutdown requested", "signal", sig.String())
 	case err := <-errCh:
 		logger.Error("http server crashed", "err", err)
+		exitCode = 1
 	}
 
 	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
@@ -119,6 +118,31 @@ func main() {
 		logger.Error("http shutdown error", "err", err)
 	}
 	logger.Info("bye")
+	if exitCode != 0 {
+		pool.Close()
+		os.Exit(exitCode)
+	}
+}
+
+// newGraphQLHandler serves the schema over GET and POST only (no
+// websockets or uploads: the API is read-only), caches parsed queries,
+// and keeps resolver errors (often SQL) out of responses: they're logged
+// and the client gets a generic message.
+func newGraphQLHandler(schema graphql.ExecutableSchema, logger *slog.Logger) http.Handler {
+	srv := handler.New(schema)
+	srv.AddTransport(transport.GET{})
+	srv.AddTransport(transport.POST{})
+	srv.SetQueryCache(lru.New[*ast.QueryDocument](1000))
+	srv.Use(extension.Introspection{})
+	srv.SetErrorPresenter(func(ctx context.Context, err error) *gqlerror.Error {
+		gqlErr := graphql.DefaultErrorPresenter(ctx, err)
+		if gqlErr.Err != nil {
+			logger.Error("graphql resolver error", "path", gqlErr.Path.String(), "err", err)
+			gqlErr.Message = "internal error"
+		}
+		return gqlErr
+	})
+	return srv
 }
 
 // withCORS adds minimal CORS headers for the configured origins. We do
