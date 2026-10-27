@@ -23,6 +23,10 @@ type ChartPoint = {
   home: number;
   draw: number;
   away: number;
+  // Scoreline at this snapshot — used by the goal-marker derivation
+  // to detect transitions when per-event data isn't available.
+  homeScore: number;
+  awayScore: number;
 };
 
 type Marker = {
@@ -31,6 +35,11 @@ type Marker = {
   kind: 'GOAL' | 'RED_CARD';
   teamSide: 'HOME' | 'AWAY' | null;
   description: string;
+  // When true, the marker's minute is approximate (derived from a
+  // scoreline transition between two grid snapshots rather than from
+  // a per-event source). The tooltip surfaces this so the viewer
+  // isn't misled.
+  approximate?: boolean;
 };
 
 type Props = {
@@ -72,32 +81,109 @@ export function ProbabilityTimeline({ match }: Props) {
           home: Math.round(p.pHome * 1000) / 10,
           draw: Math.round(p.pDraw * 1000) / 10,
           away: Math.round(p.pAway * 1000) / 10,
+          homeScore: p.homeScoreAtForecast ?? 0,
+          awayScore: p.awayScoreAtForecast ?? 0,
         });
       });
     return Array.from(byMinute.values()).sort((a, b) => a.minute - b.minute);
   }, [match.modelPredictions]);
 
-  const markers: Marker[] = useMemo(
-    () =>
-      (match.events ?? [])
-        .filter(
-          (ev): ev is NonNullable<typeof ev> =>
-            ev != null &&
-            (ev.eventType === 'GOAL' || ev.eventType === 'RED_CARD') &&
-            ev.minute != null,
-        )
-        .map((ev) => ({
-          key: ev.id,
-          // Clamp to the chart's 0-90 X-axis. Stoppage-time events
-          // pin to 45 or 90 because that's where the probability
-          // snapshot was taken too.
-          minute: Math.min(90, Math.max(0, ev.minute ?? 0)),
-          kind: ev.eventType as 'GOAL' | 'RED_CARD',
-          teamSide: (ev.teamSide as 'HOME' | 'AWAY' | null) ?? null,
-          description: ev.description ?? '',
-        })),
-    [match.events],
-  );
+  // Markers for the chart X-axis. Priority:
+  //   1. Per-event data from api-football (precise minute + player +
+  //      description). Available for matches inside the free-tier
+  //      3-day window.
+  //   2. Fallback: derive goal markers from scoreline transitions
+  //      between consecutive chart snapshots. Minute is approximate
+  //      (the step appears at the next grid point after the real
+  //      goal) but the fact and side are correct. Honest-labelled
+  //      via the "approximate" flag so the tooltip can note it.
+  const markers: Marker[] = useMemo(() => {
+    const apiEvents = (match.events ?? []).filter(
+      (ev): ev is NonNullable<typeof ev> =>
+        ev != null &&
+        (ev.eventType === 'GOAL' || ev.eventType === 'RED_CARD') &&
+        ev.minute != null,
+    );
+    const hasApiGoals = apiEvents.some((e) => e.eventType === 'GOAL');
+    if (hasApiGoals) {
+      return apiEvents.map((ev) => ({
+        key: ev.id,
+        // Clamp to the chart's 0-90 X-axis. Stoppage-time events pin
+        // to 45 or 90 because that's where the probability snapshot
+        // was taken too.
+        minute: Math.min(90, Math.max(0, ev.minute ?? 0)),
+        kind: ev.eventType as 'GOAL' | 'RED_CARD',
+        teamSide: (ev.teamSide as 'HOME' | 'AWAY' | null) ?? null,
+        description: ev.description ?? '',
+        approximate: false,
+      }));
+    }
+    // Fallback: walk the sorted chart snapshots, emit a GOAL marker
+    // for every net home / away score increment between consecutive
+    // points. Works whenever modelPredictions carry homeScoreAtForecast
+    // / awayScoreAtForecast — which they do for every FINISHED match
+    // reconstructed from HT/FT scoreline (always present on
+    // football-data.org's free tier).
+    const derived: Marker[] = [];
+    let prevH = 0;
+    let prevA = 0;
+    chartData.forEach((pt, i) => {
+      if (i === 0) {
+        prevH = pt.homeScore;
+        prevA = pt.awayScore;
+        return;
+      }
+      const dH = pt.homeScore - prevH;
+      const dA = pt.awayScore - prevA;
+      for (let g = 0; g < dH; g++) {
+        derived.push({
+          key: `derived-H-${pt.minute}-${g}`,
+          minute: pt.minute,
+          kind: 'GOAL',
+          teamSide: 'HOME',
+          description: 'exact minute unknown (no per-event data)',
+          approximate: true,
+        });
+      }
+      for (let g = 0; g < dA; g++) {
+        derived.push({
+          key: `derived-A-${pt.minute}-${g}`,
+          minute: pt.minute,
+          kind: 'GOAL',
+          teamSide: 'AWAY',
+          description: 'exact minute unknown (no per-event data)',
+          approximate: true,
+        });
+      }
+      prevH = pt.homeScore;
+      prevA = pt.awayScore;
+    });
+    return derived;
+  }, [match.events, chartData]);
+
+  // When several markers land on the same minute (e.g. two goals in
+  // the HT→FT delta of a match with no per-event data), spread them
+  // out horizontally via an SVG-pixel offset so they don't overlap.
+  // The underlying X-axis coordinate stays identical so the tooltip
+  // and minute label are still correct.
+  const markersWithOffset = useMemo(() => {
+    const byMinute = new Map<number, Marker[]>();
+    markers.forEach((m) => {
+      const bucket = byMinute.get(m.minute) ?? [];
+      bucket.push(m);
+      byMinute.set(m.minute, bucket);
+    });
+    const out: (Marker & { pxOffset: number })[] = [];
+    const spacingPx = 18;
+    byMinute.forEach((bucket) => {
+      const n = bucket.length;
+      bucket.forEach((m, i) => {
+        const centred = i - (n - 1) / 2;
+        out.push({ ...m, pxOffset: centred * spacingPx });
+      });
+    });
+    return out;
+  }, [markers]);
 
   // Which model is actually driving the plot (surfaced in the header
   // so viewers can tell what formula they're looking at).
@@ -162,7 +248,7 @@ export function ProbabilityTimeline({ match }: Props) {
               when we actually have event data for this match
               (api-football provides this on recent matches only —
               free-tier 3-day sliding window). */}
-          {markers.map((mk) => (
+          {markersWithOffset.map((mk) => (
             <ReferenceDot
               key={mk.key}
               x={mk.minute}
@@ -196,30 +282,37 @@ export function ProbabilityTimeline({ match }: Props) {
 type MarkerShapeProps = {
   cx?: number;
   cy?: number;
-  payload?: Marker;
+  payload?: Marker & { pxOffset?: number };
 };
 function EventMarkerShape({ cx, cy, payload }: MarkerShapeProps) {
   if (cx == null || !payload) return null;
+  // Apply horizontal pixel offset so stacked markers at the same
+  // minute don't visually overlap.
+  const x = cx + (payload.pxOffset ?? 0);
   const anchorY = (cy ?? 0) + 18;
   const isGoal = payload.kind === 'GOAL';
   const sideColor =
     payload.teamSide === 'HOME' ? '#38d996' : payload.teamSide === 'AWAY' ? '#ff7fa3' : '#9aa6ba';
+  // Approximate markers (derived from scoreline, no per-event source)
+  // render with a dashed stroke and a tilde-prefixed minute label so
+  // the viewer can distinguish them from precise ones.
+  const approx = payload.approximate === true;
+  const strokeDash = approx ? '2 2' : undefined;
+  const minuteText = approx ? `~${payload.minute}'` : `${payload.minute}'`;
+  const tooltipMinute = approx ? `~${payload.minute}'` : `${payload.minute}'`;
   return (
     <g>
-      <title>{`${payload.minute}' — ${payload.kind === 'GOAL' ? 'Goal' : 'Red card'}${
-        payload.description ? ' — ' + payload.description : ''
-      }`}</title>
+      <title>{`${tooltipMinute} — ${payload.kind === 'GOAL' ? 'Goal' : 'Red card'}${
+        payload.teamSide ? ` (${payload.teamSide})` : ''
+      }${payload.description ? ' — ' + payload.description : ''}`}</title>
       {isGoal ? (
-        // Soccer-ball-ish glyph: a filled circle with a small inner
-        // dot. Scales cleanly at any dpr.
         <>
-          <circle cx={cx} cy={anchorY - 10} r={7} fill="#fff" stroke={sideColor} strokeWidth={2} />
-          <circle cx={cx} cy={anchorY - 10} r={2.4} fill={sideColor} />
+          <circle cx={x} cy={anchorY - 10} r={7} fill="#fff" stroke={sideColor} strokeWidth={2} strokeDasharray={strokeDash} />
+          <circle cx={x} cy={anchorY - 10} r={2.4} fill={sideColor} />
         </>
       ) : (
-        // Red card: a solid rounded rectangle.
         <rect
-          x={cx - 5}
+          x={x - 5}
           y={anchorY - 17}
           width={10}
           height={14}
@@ -227,18 +320,20 @@ function EventMarkerShape({ cx, cy, payload }: MarkerShapeProps) {
           fill="#ef4a56"
           stroke="#1a0a0c"
           strokeWidth={0.75}
+          strokeDasharray={strokeDash}
         />
       )}
       <text
-        x={cx}
+        x={x}
         y={anchorY + 10}
         textAnchor="middle"
         fontSize={10}
         fontFamily="system-ui, sans-serif"
-        fill="#9aa6ba"
+        fill={approx ? '#6c7891' : '#9aa6ba'}
+        fontStyle={approx ? 'italic' : 'normal'}
         style={{ fontFeatureSettings: '"tnum"' }}
       >
-        {payload.minute}&apos;
+        {minuteText}
       </text>
     </g>
   );

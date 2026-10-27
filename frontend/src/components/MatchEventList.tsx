@@ -76,10 +76,10 @@ export function MatchEventList({ match }: Props) {
         </ul>
       ) : (
         <EmptyState
-          title="No events recorded"
+          title="No per-event data"
           description={
             match.provenance === 'LIVE'
-              ? 'Per-event data (goals, cards, subs, VAR) is ingested from api-football.com, whose free tier only covers the last 24h / today / tomorrow. Older matches have no event timeline.'
+              ? "Per-event data (cards, subs, VAR) is ingested from api-football.com, whose free tier only covers the last 24h / today / tomorrow. Older matches have no event feed. The chart below still shows goal markers derived from the HT/FT scoreline — minutes are approximate (marked ~), teams are correct."
               : undefined
           }
         />

@@ -141,6 +141,8 @@ export const MATCH_DETAIL_QUERY = gql`
         modelVersion
         forecastAt
         matchMinute
+        homeScoreAtForecast
+        awayScoreAtForecast
         pHome
         pDraw
         pAway
