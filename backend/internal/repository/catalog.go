@@ -16,12 +16,24 @@ type Catalog struct {
 // NewCatalog returns a Catalog bound to the given pool.
 func NewCatalog(pool *sql.DB) *Catalog { return &Catalog{pool: pool} }
 
-// UpsertCompetition inserts a competition by id or updates it if it exists.
+// UpsertCompetition inserts a single competition. Delegates to the batch
+// implementation for consistency.
 func (c *Catalog) UpsertCompetition(ctx context.Context, comp Competition) error {
-	const q = `
-		INSERT INTO competitions
+	return c.UpsertCompetitionBatch(ctx, []Competition{comp})
+}
+
+// UpsertCompetitionBatch upserts many competitions in one round-trip.
+func (c *Catalog) UpsertCompetitionBatch(ctx context.Context, rows []Competition) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	const cols = 7
+	tuple := "(" + strings.Repeat("?, ", cols-1) + "?),"
+	placeholders := strings.Repeat(tuple, len(rows))
+	placeholders = placeholders[:len(placeholders)-1]
+	q := `INSERT INTO competitions
 		  (id, provider, external_id, name, country, season, logo_url)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		VALUES ` + placeholders + `
 		ON DUPLICATE KEY UPDATE
 		  provider=VALUES(provider),
 		  external_id=VALUES(external_id),
@@ -29,20 +41,34 @@ func (c *Catalog) UpsertCompetition(ctx context.Context, comp Competition) error
 		  country=VALUES(country),
 		  season=VALUES(season),
 		  logo_url=VALUES(logo_url),
-		  updated_at=CURRENT_TIMESTAMP(6)
-	`
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		  updated_at=CURRENT_TIMESTAMP(6)`
+	args := make([]any, 0, len(rows)*cols)
+	for _, r := range rows {
+		args = append(args, r.ID, r.Provider, r.ExternalID, r.Name, r.Country, r.Season, r.LogoURL)
+	}
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	_, err := c.pool.ExecContext(ctx, q, comp.ID, comp.Provider, comp.ExternalID, comp.Name, comp.Country, comp.Season, comp.LogoURL)
+	_, err := c.pool.ExecContext(ctx, q, args...)
 	return err
 }
 
-// UpsertTeam inserts a team by id or updates it if it exists.
+// UpsertTeam inserts a single team. Delegates to the batch implementation.
 func (c *Catalog) UpsertTeam(ctx context.Context, t Team) error {
-	const q = `
-		INSERT INTO teams
+	return c.UpsertTeamBatch(ctx, []Team{t})
+}
+
+// UpsertTeamBatch upserts many teams in one round-trip.
+func (c *Catalog) UpsertTeamBatch(ctx context.Context, rows []Team) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	const cols = 8
+	tuple := "(" + strings.Repeat("?, ", cols-1) + "?),"
+	placeholders := strings.Repeat(tuple, len(rows))
+	placeholders = placeholders[:len(placeholders)-1]
+	q := `INSERT INTO teams
 		  (id, provider, external_id, name, short_name, country, logo_url, elo_rating)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES ` + placeholders + `
 		ON DUPLICATE KEY UPDATE
 		  provider=VALUES(provider),
 		  external_id=VALUES(external_id),
@@ -51,11 +77,14 @@ func (c *Catalog) UpsertTeam(ctx context.Context, t Team) error {
 		  country=VALUES(country),
 		  logo_url=VALUES(logo_url),
 		  elo_rating=VALUES(elo_rating),
-		  updated_at=CURRENT_TIMESTAMP(6)
-	`
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		  updated_at=CURRENT_TIMESTAMP(6)`
+	args := make([]any, 0, len(rows)*cols)
+	for _, r := range rows {
+		args = append(args, r.ID, r.Provider, r.ExternalID, r.Name, r.ShortName, r.Country, r.LogoURL, r.EloRating)
+	}
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	_, err := c.pool.ExecContext(ctx, q, t.ID, t.Provider, t.ExternalID, t.Name, t.ShortName, t.Country, t.LogoURL, t.EloRating)
+	_, err := c.pool.ExecContext(ctx, q, args...)
 	return err
 }
 
@@ -86,6 +115,33 @@ func (c *Catalog) ListCompetitions(ctx context.Context) ([]Competition, error) {
 }
 
 // GetTeams returns the teams whose ids are in the provided set, keyed by id.
+// ListTeams returns every team row. Used by jobs that need to resolve
+// team-id → name in bulk (e.g. the api-football fixture-mapping sweep,
+// which keys on team names). Cheap at MVP scale (hundreds of teams).
+func (c *Catalog) ListTeams(ctx context.Context) ([]Team, error) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	rows, err := c.pool.QueryContext(ctx, `
+		SELECT id, provider, external_id, name, short_name, country, logo_url,
+		       elo_rating, created_at, updated_at
+		FROM teams
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Team
+	for rows.Next() {
+		var t Team
+		if err := rows.Scan(&t.ID, &t.Provider, &t.ExternalID, &t.Name, &t.ShortName,
+			&t.Country, &t.LogoURL, &t.EloRating, &t.CreatedAt, &t.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
 func (c *Catalog) GetTeams(ctx context.Context, ids []string) (map[string]Team, error) {
 	if len(ids) == 0 {
 		return map[string]Team{}, nil

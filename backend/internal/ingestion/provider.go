@@ -42,6 +42,11 @@ type Fixture struct {
 	AwayScore       int
 	Minute          *int
 	FinalResult     *repository.Outcome
+	// HalfTimeHome / HalfTimeAway carry the half-time scoreline once the
+	// match has reached HT. Both nil before HT is reached. These power
+	// the retrospective probability-evolution snapshot at minute 45.
+	HalfTimeHome    *int
+	HalfTimeAway    *int
 	SourceUpdatedAt time.Time
 }
 
@@ -82,4 +87,14 @@ type Provider interface {
 	FetchFixtures(ctx context.Context) ([]Fixture, error)
 	FetchEvents(ctx context.Context, extMatchIDs []string) ([]Event, error)
 	FetchBenchmarkForecasts(ctx context.Context, extMatchIDs []string) ([]BenchmarkForecast, error)
+}
+
+// MatchFetcher is an optional capability providers may implement to
+// support the per-match live-focus refresh path (one request per match
+// instead of a whole-competition sweep). The sync's RefreshMatch method
+// type-asserts on this; providers that don't implement it get a clear
+// "not supported" error from RefreshMatch rather than a wasted
+// full-competition fetch.
+type MatchFetcher interface {
+	FetchMatch(ctx context.Context, externalMatchID string) (*Fixture, error)
 }

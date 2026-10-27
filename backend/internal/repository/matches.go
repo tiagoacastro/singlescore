@@ -18,14 +18,44 @@ type Matches struct {
 // NewMatches returns a Matches repo bound to the pool.
 func NewMatches(pool *sql.DB) *Matches { return &Matches{pool: pool} }
 
-// UpsertMatch inserts or updates a match row.
+// UpsertMatch inserts or updates a single match row.
 func (m *Matches) UpsertMatch(ctx context.Context, r Match) error {
-	const q = `
-		INSERT INTO matches
+	return m.UpsertMatchBatch(ctx, []Match{r})
+}
+
+// UpsertMatchBatch upserts many matches in one round-trip. This is the
+// hot path for the live ingestion loop; a single-row upsert pattern is
+// ~175 ms per call over Oregon-US-West, which rules out whole-season
+// imports. Batching to ~500 rows at a time keeps a full five-league
+// refresh under one minute.
+const matchUpsertBatchSize = 500
+
+func (m *Matches) UpsertMatchBatch(ctx context.Context, rows []Match) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	for start := 0; start < len(rows); start += matchUpsertBatchSize {
+		end := start + matchUpsertBatchSize
+		if end > len(rows) {
+			end = len(rows)
+		}
+		if err := m.upsertMatchChunk(ctx, rows[start:end]); err != nil {
+			return fmt.Errorf("upsert match batch [%d:%d]: %w", start, end, err)
+		}
+	}
+	return nil
+}
+
+func (m *Matches) upsertMatchChunk(ctx context.Context, rows []Match) error {
+	const cols = 17
+	tuple := "(" + strings.Repeat("?, ", cols-1) + "?),"
+	placeholders := strings.Repeat(tuple, len(rows))
+	placeholders = placeholders[:len(placeholders)-1]
+	q := `INSERT INTO matches
 		  (id, provider, external_id, competition_id, home_team_id, away_team_id,
 		   kickoff_at, status, minute, home_score, away_score,
 		   home_red_cards, away_red_cards, final_result, venue, provenance, source_updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES ` + placeholders + `
 		ON DUPLICATE KEY UPDATE
 		  provider=VALUES(provider),
 		  external_id=VALUES(external_id),
@@ -43,15 +73,19 @@ func (m *Matches) UpsertMatch(ctx context.Context, r Match) error {
 		  venue=VALUES(venue),
 		  provenance=VALUES(provenance),
 		  source_updated_at=VALUES(source_updated_at),
-		  updated_at=CURRENT_TIMESTAMP(6)
-	`
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		  updated_at=CURRENT_TIMESTAMP(6)`
+	args := make([]any, 0, len(rows)*cols)
+	for _, r := range rows {
+		args = append(args,
+			r.ID, r.Provider, r.ExternalID, r.CompetitionID, r.HomeTeamID, r.AwayTeamID,
+			r.KickoffAt, string(r.Status), r.Minute, r.HomeScore, r.AwayScore,
+			r.HomeRedCards, r.AwayRedCards, nullableStr(r.FinalResult), r.Venue,
+			string(r.Provenance), r.SourceUpdatedAt,
+		)
+	}
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
-	_, err := m.pool.ExecContext(ctx, q,
-		r.ID, r.Provider, r.ExternalID, r.CompetitionID, r.HomeTeamID, r.AwayTeamID,
-		r.KickoffAt, string(r.Status), r.Minute, r.HomeScore, r.AwayScore,
-		r.HomeRedCards, r.AwayRedCards, nullableStr(r.FinalResult), r.Venue, string(r.Provenance), r.SourceUpdatedAt,
-	)
+	_, err := m.pool.ExecContext(ctx, q, args...)
 	return err
 }
 
@@ -63,6 +97,32 @@ func nullableStr(o *Outcome) any {
 }
 
 // GetByID returns the match with the given id, or (nil, nil) if missing.
+// ListAll returns every match row with only the fields the fixture
+// mapping sweep needs (id, team ids, kickoff). Cheap at MVP scale
+// (~1,752 rows for a full season) and used only by cmd/ingest-events.
+// Not exposed via GraphQL.
+func (m *Matches) ListAll(ctx context.Context) ([]Match, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	rows, err := m.pool.QueryContext(ctx, `
+		SELECT id, home_team_id, away_team_id, kickoff_at
+		FROM matches
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Match
+	for rows.Next() {
+		var r Match
+		if err := rows.Scan(&r.ID, &r.HomeTeamID, &r.AwayTeamID, &r.KickoffAt); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
 func (m *Matches) GetByID(ctx context.Context, id string) (*Match, error) {
 	const q = `
 		SELECT id, provider, external_id, competition_id, home_team_id, away_team_id,
@@ -293,18 +353,31 @@ func (m *Matches) InsertEvent(ctx context.Context, e MatchEvent) error {
 	return m.InsertEventsBatch(ctx, []MatchEvent{e})
 }
 
-// InsertEventsBatch writes many events in one round-trip.
+// InsertEventsBatch writes many events in one round-trip. Rows with
+// deterministic ids (e.g. api-football event uploads keyed by fixture
+// + minute + team + player + type) upsert in place rather than
+// duplicating — this is what makes repeated event-refresh runs
+// idempotent and keeps the timeline marker count bounded.
 func (m *Matches) InsertEventsBatch(ctx context.Context, events []MatchEvent) error {
 	if len(events) == 0 {
 		return nil
 	}
 	const cols = 11
-	placeholders := strings.Repeat("(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?),", len(events))
+	tuple := "(" + strings.Repeat("?, ", cols-1) + "?),"
+	placeholders := strings.Repeat(tuple, len(events))
 	placeholders = placeholders[:len(placeholders)-1]
 	q := `INSERT INTO match_events
 		  (id, match_id, provider, external_id, event_type, team_side,
 		   minute, added_minute, description, event_time, source_timestamp)
-		VALUES ` + placeholders
+		VALUES ` + placeholders + `
+		ON DUPLICATE KEY UPDATE
+		  event_type = VALUES(event_type),
+		  team_side = VALUES(team_side),
+		  minute = VALUES(minute),
+		  added_minute = VALUES(added_minute),
+		  description = VALUES(description),
+		  event_time = VALUES(event_time),
+		  source_timestamp = VALUES(source_timestamp)`
 	args := make([]any, 0, len(events)*cols)
 	for _, e := range events {
 		args = append(args,

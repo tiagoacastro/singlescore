@@ -92,7 +92,7 @@ func TestClient_GetCompetitionMatches_Success(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	resp, err := c.GetCompetitionMatches(ctx, "PPL")
+	resp, err := c.GetCompetitionMatches(ctx, "PPL", MatchesQuery{})
 	if err != nil {
 		t.Fatalf("GetCompetitionMatches: %v", err)
 	}
@@ -119,7 +119,7 @@ func TestClient_GetCompetitionMatches_ErrorStatus(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	_, err := c.GetCompetitionMatches(ctx, "ZZZ")
+	_, err := c.GetCompetitionMatches(ctx, "ZZZ", MatchesQuery{})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -153,11 +153,11 @@ func TestClient_RateLimiter_SpacesRequests(t *testing.T) {
 	// Two requests must fit instantly; the third must be blocked by the
 	// limiter and the short context should cancel it with ctx error.
 	for i := 0; i < 2; i++ {
-		if _, err := c.GetCompetitionMatches(ctx, "PL"); err != nil {
+		if _, err := c.GetCompetitionMatches(ctx, "PL", MatchesQuery{}); err != nil {
 			t.Fatalf("request %d failed: %v", i, err)
 		}
 	}
-	if _, err := c.GetCompetitionMatches(ctx, "PL"); err == nil {
+	if _, err := c.GetCompetitionMatches(ctx, "PL", MatchesQuery{}); err == nil {
 		t.Fatal("third request should be blocked by limiter + ctx timeout")
 	}
 	if calls != 2 {
@@ -225,6 +225,41 @@ func TestProvider_FetchFixtures_MapsCorrectly(t *testing.T) {
 	}
 }
 
+func TestProvider_FetchFixtures_PartialReturnsPartialError(t *testing.T) {
+	// Mixed response: PPL returns real fixtures, PL returns 429. The
+	// caller must see BOTH the fixtures and the per-competition error so
+	// an operator knows a league was skipped — this is the regression
+	// test for the silent partial-failure bug we hit on first live run.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/PPL/") {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(ppl2026Response))
+			return
+		}
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"message":"You reached your request limit."}`))
+	}))
+	t.Cleanup(srv.Close)
+	client, err := New("test-token", Options{BaseURL: srv.URL + "/v4", RequestsPerMinute: 1000})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	provider := NewProvider(client, []string{"PPL", "PL"})
+	fx, err := provider.FetchFixtures(context.Background())
+	if err == nil {
+		t.Fatal("expected non-nil error for partial fetch")
+	}
+	if _, ok := err.(*PartialError); !ok {
+		t.Fatalf("expected *PartialError, got %T: %v", err, err)
+	}
+	if len(fx) != 2 {
+		t.Fatalf("expected PPL fixtures to be returned despite PL failure, got %d", len(fx))
+	}
+	if !strings.Contains(err.Error(), "PL") {
+		t.Fatalf("expected PL error in message, got %q", err.Error())
+	}
+}
+
 func TestProvider_FetchFixtures_FailsOnlyIfAllCompsFail(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -242,6 +277,181 @@ func TestProvider_FetchFixtures_FailsOnlyIfAllCompsFail(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "all competitions failed") {
 		t.Fatalf("expected joined error, got %q", err.Error())
+	}
+}
+
+func TestClient_ObservesServerQuotaHeaders(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("x-requests-available-minute", "7")
+		w.Header().Set("X-RequestCounter-Reset", "42")
+		_, _ = w.Write([]byte(`{"competition":{"code":"PL"},"matches":[]}`))
+	}))
+	t.Cleanup(srv.Close)
+	c, err := New("test-token", Options{BaseURL: srv.URL + "/v4", RequestsPerMinute: 1000})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if got := c.Available(); got != -1 {
+		t.Fatalf("want unknown (-1) before first call, got %d", got)
+	}
+	if _, err := c.GetCompetitionMatches(context.Background(), "PL", MatchesQuery{}); err != nil {
+		t.Fatalf("call: %v", err)
+	}
+	if got := c.Available(); got != 7 {
+		t.Fatalf("want available=7 after response, got %d", got)
+	}
+}
+
+func TestClient_ServerGate_BlocksWhenExhausted(t *testing.T) {
+	// First response says "0 available, reset in 2s". The second request
+	// must be delayed; with a 100ms context deadline it should timeout.
+	first := true
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if first {
+			first = false
+			w.Header().Set("x-requests-available-minute", "0")
+			w.Header().Set("X-RequestCounter-Reset", "2")
+		}
+		_, _ = w.Write([]byte(`{"competition":{"code":"PL"},"matches":[]}`))
+	}))
+	t.Cleanup(srv.Close)
+	c, err := New("test-token", Options{BaseURL: srv.URL + "/v4", RequestsPerMinute: 1000})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if _, err := c.GetCompetitionMatches(context.Background(), "PL", MatchesQuery{}); err != nil {
+		t.Fatalf("first call: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	_, err = c.GetCompetitionMatches(ctx, "PL", MatchesQuery{})
+	if err == nil {
+		t.Fatal("second call should be blocked by server-gate until reset")
+	}
+}
+
+const singleMatchResponse = `{
+  "id": 547123,
+  "utcDate": "2026-10-27T19:00:00Z",
+  "status": "IN_PLAY",
+  "minute": 37,
+  "matchday": 10,
+  "stage": "REGULAR_SEASON",
+  "lastUpdated": "2026-10-27T20:12:00Z",
+  "homeTeam": {"id": 503, "name": "SL Benfica", "shortName": "Benfica", "tla": "BEN", "crest": ""},
+  "awayTeam": {"id": 498, "name": "FC Porto", "shortName": "Porto", "tla": "FCP", "crest": ""},
+  "score": {
+    "winner": null,
+    "duration": "REGULAR",
+    "fullTime": {"home": 1, "away": 0},
+    "halfTime": {"home": 1, "away": 0}
+  },
+  "season": {"id": 2026, "startDate": "2026-08-10"}
+}`
+
+func TestClient_GetMatch_UnwrapsTopLevel(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v4/matches/547123" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(singleMatchResponse))
+	}))
+	t.Cleanup(srv.Close)
+	c, err := New("test-token", Options{BaseURL: srv.URL + "/v4", RequestsPerMinute: 1000})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	m, err := c.GetMatch(context.Background(), 547123)
+	if err != nil {
+		t.Fatalf("GetMatch: %v", err)
+	}
+	if m.ID != 547123 {
+		t.Fatalf("want id 547123, got %d", m.ID)
+	}
+	if m.Status != "IN_PLAY" {
+		t.Fatalf("want IN_PLAY, got %s", m.Status)
+	}
+	if m.Score.FullTime.Home == nil || *m.Score.FullTime.Home != 1 {
+		t.Fatalf("home score mismatch: %+v", m.Score.FullTime)
+	}
+}
+
+func TestClient_GetMatch_UnwrapsNestedShape(t *testing.T) {
+	// Some documented API versions wrap the match as {"match": {...}}.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"match":` + singleMatchResponse + `}`))
+	}))
+	t.Cleanup(srv.Close)
+	c, err := New("test-token", Options{BaseURL: srv.URL + "/v4", RequestsPerMinute: 1000})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	m, err := c.GetMatch(context.Background(), 547123)
+	if err != nil {
+		t.Fatalf("GetMatch: %v", err)
+	}
+	if m.ID != 547123 {
+		t.Fatalf("want id 547123 from wrapped response, got %d", m.ID)
+	}
+}
+
+func TestProvider_FetchMatch_ReturnsFixture(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(singleMatchResponse))
+	}))
+	t.Cleanup(srv.Close)
+	c, err := New("test-token", Options{BaseURL: srv.URL + "/v4", RequestsPerMinute: 1000})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	provider := NewProvider(c, nil)
+	fx, err := provider.FetchMatch(context.Background(), "547123")
+	if err != nil {
+		t.Fatalf("FetchMatch: %v", err)
+	}
+	if fx.ExternalMatchID != "547123" {
+		t.Fatalf("external id: %q", fx.ExternalMatchID)
+	}
+	if fx.Status != repository.StatusLive {
+		t.Fatalf("want LIVE status, got %s", fx.Status)
+	}
+	if fx.Minute == nil || *fx.Minute != 37 {
+		t.Fatalf("want minute 37, got %v", fx.Minute)
+	}
+	if fx.HomeScore != 1 || fx.AwayScore != 0 {
+		t.Fatalf("want 1-0, got %d-%d", fx.HomeScore, fx.AwayScore)
+	}
+}
+
+func TestProvider_FetchMatch_RejectsNonNumericID(t *testing.T) {
+	provider := NewProvider(nil, nil)
+	_, err := provider.FetchMatch(context.Background(), "not-a-number")
+	if err == nil {
+		t.Fatal("expected error for non-numeric id")
+	}
+	if !strings.Contains(err.Error(), "football-data.org integer id") {
+		t.Fatalf("expected clear error, got %q", err.Error())
+	}
+}
+
+func TestClient_QueryEncoding(t *testing.T) {
+	got := MatchesQuery{
+		DateFrom: time.Date(2026, 10, 27, 0, 0, 0, 0, time.UTC),
+		DateTo:   time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC),
+		Status:   []string{"SCHEDULED", "LIVE"},
+	}.encode()
+	want := "dateFrom=2026-10-27&dateTo=2026-11-03&status=SCHEDULED,LIVE"
+	if got != want {
+		t.Fatalf("encode mismatch:\n  got:  %s\n  want: %s", got, want)
+	}
+	empty := MatchesQuery{}
+	if empty.encode() != "" {
+		t.Fatal("zero MatchesQuery should produce empty query string")
 	}
 }
 

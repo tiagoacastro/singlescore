@@ -11,6 +11,7 @@ import (
 	"github.com/tiagocastro/singlescore/backend/internal/repository"
 )
 
+
 // ProviderName is the identifier we store in `provider` columns.
 const ProviderName = "football-data.org"
 
@@ -19,10 +20,16 @@ const ProviderName = "football-data.org"
 // Scope v1 (free tier): PPL, PL, SA, PD, BL1 — the five leagues the
 // product currently supports. Anything outside this list is skipped at
 // the adapter boundary.
+//
+// Window is an optional date filter applied to every per-competition
+// request. The zero value means "whole current season" and costs one
+// request per league regardless of window size, so prefer a narrow
+// window for high-frequency live polling.
 type Provider struct {
 	client     *Client
 	comps      []string
 	capability []ingestion.Capability
+	window     MatchesQuery
 }
 
 // SupportedCompetitions is the whitelist of free-tier competitions we
@@ -33,12 +40,19 @@ var SupportedCompetitions = []string{"PPL", "PL", "SA", "PD", "BL1"}
 // restricted set of free-tier competitions we care about. Pass a custom
 // `comps` to scope further.
 func NewProvider(client *Client, comps []string) *Provider {
+	return NewProviderWithWindow(client, comps, MatchesQuery{})
+}
+
+// NewProviderWithWindow is NewProvider plus a date-window filter applied
+// to every per-competition request.
+func NewProviderWithWindow(client *Client, comps []string, window MatchesQuery) *Provider {
 	if len(comps) == 0 {
 		comps = append(comps, SupportedCompetitions...)
 	}
 	return &Provider{
 		client: client,
 		comps:  comps,
+		window: window,
 		capability: []ingestion.Capability{
 			ingestion.CapFixtures,
 			ingestion.CapLiveState,
@@ -58,15 +72,21 @@ func (p *Provider) Capabilities() []ingestion.Capability {
 }
 
 // FetchFixtures returns every scheduled, live, and finished match across
-// the configured competitions. Errors are returned per competition only
-// if ALL competitions fail; partial failures are logged into the
-// returned error summary (joined with ';').
+// the configured competitions.
+//
+// Error semantics:
+//   - All competitions failed → returns (nil, non-nil error) with the
+//     joined per-competition failures. Caller treats as a hard failure.
+//   - At least one succeeded + at least one failed → returns (fixtures,
+//     *PartialError). Caller SHOULD surface the error (so the operator
+//     knows some leagues were skipped) but can keep the partial fixtures.
+//   - All competitions succeeded → returns (fixtures, nil).
 func (p *Provider) FetchFixtures(ctx context.Context) ([]ingestion.Fixture, error) {
 	out := make([]ingestion.Fixture, 0, 64)
 	var errMsgs []string
 	okAny := false
 	for _, code := range p.comps {
-		resp, err := p.client.GetCompetitionMatches(ctx, code)
+		resp, err := p.client.GetCompetitionMatches(ctx, code, p.window)
 		if err != nil {
 			errMsgs = append(errMsgs, fmt.Sprintf("%s: %v", code, err))
 			continue
@@ -87,7 +107,48 @@ func (p *Provider) FetchFixtures(ctx context.Context) ([]ingestion.Fixture, erro
 	if !okAny && len(errMsgs) > 0 {
 		return nil, fmt.Errorf("all competitions failed: %s", strings.Join(errMsgs, "; "))
 	}
+	if len(errMsgs) > 0 {
+		return out, &PartialError{Messages: errMsgs}
+	}
 	return out, nil
+}
+
+// PartialError is returned by FetchFixtures when some (but not all)
+// competitions failed. The caller receives the successful fixtures and
+// this error so it can decide whether to proceed and how to log.
+type PartialError struct {
+	Messages []string
+}
+
+func (e *PartialError) Error() string {
+	return "partial fetch: " + strings.Join(e.Messages, "; ")
+}
+
+// FetchMatch fetches a single match by its external id (the stringified
+// football-data.org integer id). Used by the per-match live-focus
+// refresh — poll a specific match more often than the broad sweep.
+func (p *Provider) FetchMatch(ctx context.Context, externalMatchID string) (*ingestion.Fixture, error) {
+	id, err := strconv.Atoi(externalMatchID)
+	if err != nil {
+		return nil, fmt.Errorf("external match id %q is not a football-data.org integer id", externalMatchID)
+	}
+	m, err := p.client.GetMatch(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	// Competition metadata on single-match responses is thinner than on
+	// the per-competition sweep; fall back to the ExternalCompID we
+	// already have in catalog. Season from match response if available.
+	compCode := ""
+	// football-data.org nests competition on the match response. Our
+	// APIMatch currently doesn't model that explicitly, so leave the
+	// code empty; the sync's upsert path keys on external match id so
+	// the match will still find its existing catalog rows.
+	fx, err := mapMatch(*m, compCode, "", "", "")
+	if err != nil {
+		return nil, err
+	}
+	return &fx, nil
 }
 
 // FetchEvents is not supported on the free tier.
@@ -143,6 +204,12 @@ func mapMatch(m APIMatch, compCode, compName, country, season string) (ingestion
 		AwayScore:       away,
 		Minute:          m.Minute,
 		FinalResult:     finalResult,
+		// HalfTime is populated once the match has reached half-time or
+		// later. Before HT both pointers in the payload are nil and we
+		// carry that nil through so the sync layer knows no HT snapshot
+		// should be generated yet.
+		HalfTimeHome:    m.Score.HalfTime.Home,
+		HalfTimeAway:    m.Score.HalfTime.Away,
 		SourceUpdatedAt: parseLastUpdated(m.LastUpdated, kickoff),
 	}
 	return fx, nil
