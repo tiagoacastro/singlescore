@@ -56,12 +56,10 @@ type CompetitionMetric struct {
 }
 
 type Dashboard struct {
-	LiveMatches             []*Match            `json:"liveMatches"`
-	RecentFinishedMatches   []*Match            `json:"recentFinishedMatches"`
-	RecentPredictionChanges []*PredictionChange `json:"recentPredictionChanges"`
-	ModelMetrics            *EvaluationSummary  `json:"modelMetrics,omitempty"`
-	DataSources             []*DataSourceStatus `json:"dataSources"`
-	SystemStatus            *Health             `json:"systemStatus"`
+	RecentFinishedMatches []*Match            `json:"recentFinishedMatches"`
+	ModelMetrics          *EvaluationSummary  `json:"modelMetrics,omitempty"`
+	DataSources           []*DataSourceStatus `json:"dataSources"`
+	SystemStatus          *Health             `json:"systemStatus"`
 }
 
 type DataSourceStatus struct {
@@ -103,24 +101,25 @@ type Health struct {
 }
 
 type Match struct {
-	ID                    string                 `json:"id"`
-	Competition           *Competition           `json:"competition"`
-	HomeTeam              *Team                  `json:"homeTeam"`
-	AwayTeam              *Team                  `json:"awayTeam"`
-	KickoffAt             time.Time              `json:"kickoffAt"`
-	Status                MatchStatus            `json:"status"`
-	Minute                *int                   `json:"minute,omitempty"`
-	HomeScore             int                    `json:"homeScore"`
-	AwayScore             int                    `json:"awayScore"`
-	FinalResult           *Outcome               `json:"finalResult,omitempty"`
-	Provenance            Provenance             `json:"provenance"`
-	Venue                 *string                `json:"venue,omitempty"`
-	Events                []*MatchEvent          `json:"events"`
-	Commentary            []*MatchCommentary     `json:"commentary"`
-	Stats                 *MatchStats            `json:"stats,omitempty"`
-	ModelPredictions      []*ModelPrediction     `json:"modelPredictions"`
-	BenchmarkPredictions  []*BenchmarkPrediction `json:"benchmarkPredictions"`
-	LatestModelPrediction *ModelPrediction       `json:"latestModelPrediction,omitempty"`
+	ID                   string                 `json:"id"`
+	Competition          *Competition           `json:"competition"`
+	HomeTeam             *Team                  `json:"homeTeam"`
+	AwayTeam             *Team                  `json:"awayTeam"`
+	KickoffAt            time.Time              `json:"kickoffAt"`
+	Status               MatchStatus            `json:"status"`
+	Minute               *int                   `json:"minute,omitempty"`
+	HomeScore            int                    `json:"homeScore"`
+	AwayScore            int                    `json:"awayScore"`
+	FinalResult          *Outcome               `json:"finalResult,omitempty"`
+	Provenance           Provenance             `json:"provenance"`
+	Venue                *string                `json:"venue,omitempty"`
+	Events               []*MatchEvent          `json:"events"`
+	Commentary           []*MatchCommentary     `json:"commentary"`
+	Stats                *MatchStats            `json:"stats,omitempty"`
+	ModelPredictions     []*ModelPrediction     `json:"modelPredictions"`
+	BenchmarkPredictions []*BenchmarkPrediction `json:"benchmarkPredictions"`
+	// Model prediction made before kickoff (the original odds).
+	PreMatchPrediction *ModelPrediction `json:"preMatchPrediction,omitempty"`
 }
 
 type MatchCommentary struct {
@@ -199,14 +198,6 @@ type PageInfo struct {
 	HasNextPage bool    `json:"hasNextPage"`
 }
 
-type PredictionChange struct {
-	Match      *Match           `json:"match"`
-	Prediction *ModelPrediction `json:"prediction"`
-	DeltaHome  float64          `json:"deltaHome"`
-	DeltaDraw  float64          `json:"deltaDraw"`
-	DeltaAway  float64          `json:"deltaAway"`
-}
-
 type Query struct {
 }
 
@@ -223,17 +214,15 @@ type BenchmarkHorizon string
 
 const (
 	BenchmarkHorizonPreMatch BenchmarkHorizon = "PRE_MATCH"
-	BenchmarkHorizonLive     BenchmarkHorizon = "LIVE"
 )
 
 var AllBenchmarkHorizon = []BenchmarkHorizon{
 	BenchmarkHorizonPreMatch,
-	BenchmarkHorizonLive,
 }
 
 func (e BenchmarkHorizon) IsValid() bool {
 	switch e {
-	case BenchmarkHorizonPreMatch, BenchmarkHorizonLive:
+	case BenchmarkHorizonPreMatch:
 		return true
 	}
 	return false
@@ -335,8 +324,6 @@ type MatchStatus string
 
 const (
 	MatchStatusScheduled MatchStatus = "SCHEDULED"
-	MatchStatusLive      MatchStatus = "LIVE"
-	MatchStatusHalftime  MatchStatus = "HALFTIME"
 	MatchStatusFinished  MatchStatus = "FINISHED"
 	MatchStatusPostponed MatchStatus = "POSTPONED"
 	MatchStatusCancelled MatchStatus = "CANCELLED"
@@ -344,8 +331,6 @@ const (
 
 var AllMatchStatus = []MatchStatus{
 	MatchStatusScheduled,
-	MatchStatusLive,
-	MatchStatusHalftime,
 	MatchStatusFinished,
 	MatchStatusPostponed,
 	MatchStatusCancelled,
@@ -353,7 +338,7 @@ var AllMatchStatus = []MatchStatus{
 
 func (e MatchStatus) IsValid() bool {
 	switch e {
-	case MatchStatusScheduled, MatchStatusLive, MatchStatusHalftime, MatchStatusFinished, MatchStatusPostponed, MatchStatusCancelled:
+	case MatchStatusScheduled, MatchStatusFinished, MatchStatusPostponed, MatchStatusCancelled:
 		return true
 	}
 	return false
@@ -457,19 +442,17 @@ const (
 	ProvenanceDemo       Provenance = "DEMO"
 	ProvenanceHistorical Provenance = "HISTORICAL"
 	ProvenanceReplay     Provenance = "REPLAY"
-	ProvenanceLive       Provenance = "LIVE"
 )
 
 var AllProvenance = []Provenance{
 	ProvenanceDemo,
 	ProvenanceHistorical,
 	ProvenanceReplay,
-	ProvenanceLive,
 }
 
 func (e Provenance) IsValid() bool {
 	switch e {
-	case ProvenanceDemo, ProvenanceHistorical, ProvenanceReplay, ProvenanceLive:
+	case ProvenanceDemo, ProvenanceHistorical, ProvenanceReplay:
 		return true
 	}
 	return false

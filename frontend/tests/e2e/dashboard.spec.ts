@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Dashboard', () => {
-  test('renders DEMO badge, headline model metrics, and at least one live match', async ({ page }) => {
+  test('renders DEMO badge, headline model metrics, and recent finished matches', async ({ page }) => {
     await page.goto('/');
     await expect(page).toHaveTitle(/SingleScore/);
 
@@ -21,16 +21,17 @@ test.describe('Dashboard', () => {
     // DEMO chip is present in the page header meta (backend reports demoMode=true).
     await expect(page.locator('.chip', { hasText: 'DEMO' }).first()).toBeVisible();
 
-    // At least one live match row visible (we seed 5).
-    const liveSection = page.getByRole('region', { name: 'Live and recent' });
-    await expect(liveSection).toBeVisible();
-    await expect(liveSection.locator('.match-row').first()).toBeVisible({ timeout: 15_000 });
+    // At least one finished match row visible, with its pre-match odds.
+    const recentSection = page.getByRole('region', { name: 'Recent matches' });
+    await expect(recentSection).toBeVisible();
+    await expect(recentSection.locator('.match-row').first()).toBeVisible({ timeout: 15_000 });
+    await expect(recentSection.locator('.prob-triplet').first()).toBeVisible();
   });
 
-  test('navigates from a live match row to the match detail page', async ({ page }) => {
+  test('navigates from a recent match row to the match detail page', async ({ page }) => {
     await page.goto('/');
     const firstRow = page
-      .getByRole('region', { name: 'Live and recent' })
+      .getByRole('region', { name: 'Recent matches' })
       .locator('.match-row')
       .first();
     await expect(firstRow).toBeVisible({ timeout: 15_000 });

@@ -15,7 +15,6 @@ interface MatchesData {
 
 const STATUS_FILTERS: { label: string; value: MatchStatus | null }[] = [
   { label: 'All', value: null },
-  { label: 'Live', value: 'LIVE' },
   { label: 'Scheduled', value: 'SCHEDULED' },
   { label: 'Finished', value: 'FINISHED' },
 ];
@@ -85,7 +84,7 @@ export function MatchesPage() {
         ) : (
           <EmptyState
             title="No matches match this filter"
-            description="Try switching the filter above, or seed demo data from the backend."
+            description="Try switching the filter above."
           />
         )}
       </section>

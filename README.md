@@ -1,8 +1,10 @@
 # SingleScore
 
-Live football intelligence and prediction analytics MVP. Tracks match
-predictions over time, compares them against benchmark providers, and
-evaluates them against actual match outcomes.
+Historical football prediction analytics MVP. Rebuilds each finished
+match's win-probability timeline from its real events, compares the
+pre-match forecast against market odds, and evaluates it against actual
+outcomes. There is no live data: everything is loaded from completed
+matches by hourly SingleStore notebooks.
 
 Scope v1: top-flight only — **Primeira Liga** (Portugal), **Premier League**
 (England), **Serie A** (Italy), **La Liga** (Spain), **Bundesliga**
@@ -30,20 +32,17 @@ Scope v1: top-flight only — **Primeira Liga** (Portugal), **Premier League**
 SingleScore/
 ├── backend/                 Go GraphQL API
 │   ├── cmd/
-│   │   ├── server/          main entry point
-│   │   ├── seed/            demo seeder (5 leagues × 5 matches each)
-│   │   └── ingest/          live ingestion CLI (football-data.org)
+│   │   └── server/          main entry point
 │   ├── internal/
 │   │   ├── config/          env loading
 │   │   ├── db/              SingleStore pool + health
 │   │   ├── logging/         slog JSON wiring
 │   │   ├── graph/           gqlgen schema, generated code, resolvers
-│   │   ├── repository/      SingleStore repositories (batched writes)
+│   │   ├── repository/      read-only SingleStore repositories
 │   │   ├── service/         orchestration + repo→GraphQL mapping
-│   │   ├── prediction/      Elo baseline predictor (+ unit tests)
-│   │   ├── evaluation/      Brier / log loss / calibration (+ unit tests)
-│   │   └── ingestion/       provider interface + sync orchestrator
-│   │       └── footballdata/ football-data.org v4 adapter (free tier)
+│   │   ├── prediction/      Elo baseline predictor (+ unit tests), the
+│   │   │                    reference the notebooks' Python port mirrors
+│   │   └── evaluation/      Brier / log loss / calibration (+ unit tests)
 │   ├── gqlgen.yml
 │   └── go.mod
 ├── frontend/                React + TypeScript app
@@ -56,7 +55,8 @@ SingleScore/
 │   │   └── styles/          SCSS tokens + global
 │   └── tests/               Playwright config + e2e specs
 ├── migrations/              numbered .sql files
-├── scripts/                 db-apply.sh, db-shell.sh
+├── notebooks/               hourly SingleStore ingest notebooks
+├── scripts/                 db-apply.sh, db-shell.sh, notebook bodies as scripts
 ├── docs/
 │   ├── architecture.md
 │   ├── data-sources.md      (league scope + free-tier plan)
@@ -78,8 +78,12 @@ SingleScore/
 # 1) apply migrations once
 ./scripts/db-apply.sh
 
-# 2) seed demo data (idempotent; add --wipe-demo for a clean slate)
-cd backend && go run ./cmd/seed --wipe-demo && cd ..
+# 2) load the season (see "Data" below). On a fresh database run the CSV
+#    ingest again after the ESPN scrape so the probability timelines are
+#    rebuilt from the real goal / red-card minutes.
+.venv/bin/python scripts/ingest_pl_season.py
+.venv/bin/python scripts/ingest_pl_events_espn.py
+.venv/bin/python scripts/ingest_pl_season.py
 
 # 3) start the backend (serves GraphQL on :8080)
 cd backend && go run ./cmd/server
@@ -111,19 +115,23 @@ npm run test:e2e           # requires backend + dev server running
 cd backend && go test ./...
 ```
 
-## Demo mode vs. real data
+## Data
 
-- `BACKEND_DEMO_MODE=true` (the current default) serves data populated by
-  `cmd/seed`. Every row is tagged `provenance = 'DEMO'`, and the UI
-  surfaces that chip wherever the data is shown.
-- `BACKEND_DEMO_MODE=false` runs the normal ingestion loop. **No live
-  provider is called without its API token being set.** See
-  `docs/data-sources.md` for the free-tier plan.
+The app is **historical-only**: the backend is a read-only GraphQL API
+and never calls a football data provider. All rows are written by the
+notebooks below and tagged `provenance = 'HISTORICAL'`.
+`BACKEND_DEMO_MODE` (default `true`) only shows the DEMO badge in the
+header and serves the GraphQL Playground.
+
+Match lists, the dashboard and the match page's score card show the
+model's **pre-match** odds. Later snapshots of a finished match converge
+on the result (100% for the winner), so they say nothing about the
+forecast; the dashboard's Brier / log-loss cards score the pre-match
+prediction for the same reason.
 
 ### Historical ingestion (football-data.co.uk, hourly notebook)
 
-The project is **API-free in day-to-day operation**: all live data is
-pulled from a single public CSV at
+All match data is pulled from a single public CSV at
 [football-data.co.uk](https://www.football-data.co.uk/englandm.php)
 (free for personal / educational use, one HTTPS `GET` per run) by a
 SingleStore notebook that runs on an hourly schedule.
@@ -172,11 +180,6 @@ re-runs only refetch the last 7 days). It writes `match_events` and
 `match_commentary` (migration `0004`), which feed the match page's event
 timeline, opportunity map, and minute-by-minute panel.
 
-Legacy per-match live-focus refresher (gated on
-`FOOTBALL_DATA_API_TOKEN`): still present in the server for compatibility
-but **off by default**. Leave the env var unset to keep the server
-API-free.
-
 ## Model honesty
 
 - Predictions come from an internal, transparent baseline (`elo-baseline
@@ -198,16 +201,14 @@ API-free.
 | Migrations v1                      | applied (schema v1 live on the `singlescore` db)      |
 | Backend scaffolding                | complete; `go build ./...` + `go vet ./...` clean     |
 | GraphQL schema + resolvers         | complete; wired to repositories via the service layer |
-| Repositories                       | complete, with batched insert paths                   |
+| Repositories                       | complete, read-only (notebooks do all writes)         |
 | Baseline predictor + unit tests    | complete; all tests green                             |
 | Evaluation (Brier/log-loss/calib)  | complete; all tests green                             |
-| Demo seeder (5 leagues × 5)        | complete, idempotent, `--wipe-demo` supported         |
 | Frontend scaffolding               | complete; `npm run typecheck` + `npm run build` clean |
 | Dashboard + Match detail pages     | complete, rendering real GraphQL data                 |
 | Model evaluation page              | complete, calibration/minute-bucket/competition views |
-| Playwright e2e                     | 1/3 green; the 2 dashboard specs assume seeded live demo matches, which the historical-only dataset no longer has |
+| Playwright e2e                     | 3 specs green against the running stack               |
 | ESPN events + commentary scrape    | complete; `notebooks/premier_league_events_espn.ipynb` + `scripts/ingest_pl_events_espn.py`, 80/80 matches matched |
 | football-data.co.uk CSV ingest     | complete; `notebooks/premier_league_ingest.ipynb` + `scripts/ingest_pl_season.py`, idempotent, ~4s per run |
-| football-data.org adapter          | kept for compatibility; off by default (no `FOOTBALL_DATA_API_TOKEN`) |
 | Scheduled ingestion job            | complete via SingleStore Portal → Jobs on the notebook (hourly cron) |
 | Figma designs                      | **pending** — using in-repo SCSS tokens for v1        |

@@ -1,16 +1,14 @@
 // Hand-authored TypeScript shapes mirroring the GraphQL schema. These are
 // used until we wire a GraphQL codegen pipeline.
 
-export type Provenance = 'DEMO' | 'HISTORICAL' | 'REPLAY' | 'LIVE';
+export type Provenance = 'DEMO' | 'HISTORICAL' | 'REPLAY';
 export type MatchStatus =
   | 'SCHEDULED'
-  | 'LIVE'
-  | 'HALFTIME'
   | 'FINISHED'
   | 'POSTPONED'
   | 'CANCELLED';
 export type Outcome = 'HOME' | 'DRAW' | 'AWAY';
-export type BenchmarkHorizon = 'PRE_MATCH' | 'LIVE';
+export type BenchmarkHorizon = 'PRE_MATCH';
 export type BenchmarkSourceType = 'ALGORITHM' | 'MARKET_ODDS' | 'MANUAL';
 
 export interface Competition {
@@ -94,7 +92,7 @@ export interface Match {
   commentary?: MatchCommentary[];
   modelPredictions?: ModelPrediction[];
   benchmarkPredictions?: BenchmarkPrediction[];
-  latestModelPrediction?: ModelPrediction | null;
+  preMatchPrediction?: ModelPrediction | null;
   stats?: MatchStats | null;
 }
 
@@ -146,18 +144,8 @@ export interface EvaluationSummary {
   dateRangeTo?: string | null;
 }
 
-export interface PredictionChange {
-  match: Match;
-  prediction: ModelPrediction;
-  deltaHome: number;
-  deltaDraw: number;
-  deltaAway: number;
-}
-
 export interface Dashboard {
-  liveMatches: Match[];
   recentFinishedMatches: Match[];
-  recentPredictionChanges: PredictionChange[];
   modelMetrics?: EvaluationSummary | null;
   dataSources: DataSourceStatus[];
   systemStatus: Health;

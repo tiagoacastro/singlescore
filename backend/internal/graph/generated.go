@@ -82,12 +82,10 @@ type ComplexityRoot struct {
 	}
 
 	Dashboard struct {
-		DataSources             func(childComplexity int) int
-		LiveMatches             func(childComplexity int) int
-		ModelMetrics            func(childComplexity int) int
-		RecentFinishedMatches   func(childComplexity int) int
-		RecentPredictionChanges func(childComplexity int) int
-		SystemStatus            func(childComplexity int) int
+		DataSources           func(childComplexity int) int
+		ModelMetrics          func(childComplexity int) int
+		RecentFinishedMatches func(childComplexity int) int
+		SystemStatus          func(childComplexity int) int
 	}
 
 	DataSourceStatus struct {
@@ -129,24 +127,24 @@ type ComplexityRoot struct {
 	}
 
 	Match struct {
-		AwayScore             func(childComplexity int) int
-		AwayTeam              func(childComplexity int) int
-		BenchmarkPredictions  func(childComplexity int) int
-		Commentary            func(childComplexity int) int
-		Competition           func(childComplexity int) int
-		Events                func(childComplexity int) int
-		FinalResult           func(childComplexity int) int
-		HomeScore             func(childComplexity int) int
-		HomeTeam              func(childComplexity int) int
-		ID                    func(childComplexity int) int
-		KickoffAt             func(childComplexity int) int
-		LatestModelPrediction func(childComplexity int) int
-		Minute                func(childComplexity int) int
-		ModelPredictions      func(childComplexity int) int
-		Provenance            func(childComplexity int) int
-		Stats                 func(childComplexity int) int
-		Status                func(childComplexity int) int
-		Venue                 func(childComplexity int) int
+		AwayScore            func(childComplexity int) int
+		AwayTeam             func(childComplexity int) int
+		BenchmarkPredictions func(childComplexity int) int
+		Commentary           func(childComplexity int) int
+		Competition          func(childComplexity int) int
+		Events               func(childComplexity int) int
+		FinalResult          func(childComplexity int) int
+		HomeScore            func(childComplexity int) int
+		HomeTeam             func(childComplexity int) int
+		ID                   func(childComplexity int) int
+		KickoffAt            func(childComplexity int) int
+		Minute               func(childComplexity int) int
+		ModelPredictions     func(childComplexity int) int
+		PreMatchPrediction   func(childComplexity int) int
+		Provenance           func(childComplexity int) int
+		Stats                func(childComplexity int) int
+		Status               func(childComplexity int) int
+		Venue                func(childComplexity int) int
 	}
 
 	MatchCommentary struct {
@@ -223,14 +221,6 @@ type ComplexityRoot struct {
 	PageInfo struct {
 		EndCursor   func(childComplexity int) int
 		HasNextPage func(childComplexity int) int
-	}
-
-	PredictionChange struct {
-		DeltaAway  func(childComplexity int) int
-		DeltaDraw  func(childComplexity int) int
-		DeltaHome  func(childComplexity int) int
-		Match      func(childComplexity int) int
-		Prediction func(childComplexity int) int
 	}
 
 	Query struct {
@@ -474,12 +464,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Dashboard.DataSources(childComplexity), true
-	case "Dashboard.liveMatches":
-		if e.ComplexityRoot.Dashboard.LiveMatches == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Dashboard.LiveMatches(childComplexity), true
 	case "Dashboard.modelMetrics":
 		if e.ComplexityRoot.Dashboard.ModelMetrics == nil {
 			break
@@ -492,12 +476,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Dashboard.RecentFinishedMatches(childComplexity), true
-	case "Dashboard.recentPredictionChanges":
-		if e.ComplexityRoot.Dashboard.RecentPredictionChanges == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Dashboard.RecentPredictionChanges(childComplexity), true
 	case "Dashboard.systemStatus":
 		if e.ComplexityRoot.Dashboard.SystemStatus == nil {
 			break
@@ -731,12 +709,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Match.KickoffAt(childComplexity), true
-	case "Match.latestModelPrediction":
-		if e.ComplexityRoot.Match.LatestModelPrediction == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Match.LatestModelPrediction(childComplexity), true
 	case "Match.minute":
 		if e.ComplexityRoot.Match.Minute == nil {
 			break
@@ -749,6 +721,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Match.ModelPredictions(childComplexity), true
+	case "Match.preMatchPrediction":
+		if e.ComplexityRoot.Match.PreMatchPrediction == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Match.PreMatchPrediction(childComplexity), true
 	case "Match.provenance":
 		if e.ComplexityRoot.Match.Provenance == nil {
 			break
@@ -1094,37 +1072,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.PageInfo.HasNextPage(childComplexity), true
 
-	case "PredictionChange.deltaAway":
-		if e.ComplexityRoot.PredictionChange.DeltaAway == nil {
-			break
-		}
-
-		return e.ComplexityRoot.PredictionChange.DeltaAway(childComplexity), true
-	case "PredictionChange.deltaDraw":
-		if e.ComplexityRoot.PredictionChange.DeltaDraw == nil {
-			break
-		}
-
-		return e.ComplexityRoot.PredictionChange.DeltaDraw(childComplexity), true
-	case "PredictionChange.deltaHome":
-		if e.ComplexityRoot.PredictionChange.DeltaHome == nil {
-			break
-		}
-
-		return e.ComplexityRoot.PredictionChange.DeltaHome(childComplexity), true
-	case "PredictionChange.match":
-		if e.ComplexityRoot.PredictionChange.Match == nil {
-			break
-		}
-
-		return e.ComplexityRoot.PredictionChange.Match(childComplexity), true
-	case "PredictionChange.prediction":
-		if e.ComplexityRoot.PredictionChange.Prediction == nil {
-			break
-		}
-
-		return e.ComplexityRoot.PredictionChange.Prediction(childComplexity), true
-
 	case "Query.competitions":
 		if e.ComplexityRoot.Query.Competitions == nil {
 			break
@@ -1395,12 +1342,8 @@ func (ec *executionContext) childFields_CompetitionMetric(ctx context.Context, f
 
 func (ec *executionContext) childFields_Dashboard(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
-	case "liveMatches":
-		return ec.fieldContext_Dashboard_liveMatches(ctx, field)
 	case "recentFinishedMatches":
 		return ec.fieldContext_Dashboard_recentFinishedMatches(ctx, field)
-	case "recentPredictionChanges":
-		return ec.fieldContext_Dashboard_recentPredictionChanges(ctx, field)
 	case "modelMetrics":
 		return ec.fieldContext_Dashboard_modelMetrics(ctx, field)
 	case "dataSources":
@@ -1523,8 +1466,8 @@ func (ec *executionContext) childFields_Match(ctx context.Context, field graphql
 		return ec.fieldContext_Match_modelPredictions(ctx, field)
 	case "benchmarkPredictions":
 		return ec.fieldContext_Match_benchmarkPredictions(ctx, field)
-	case "latestModelPrediction":
-		return ec.fieldContext_Match_latestModelPrediction(ctx, field)
+	case "preMatchPrediction":
+		return ec.fieldContext_Match_preMatchPrediction(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Match", field.Name)
 }
@@ -1679,22 +1622,6 @@ func (ec *executionContext) childFields_PageInfo(ctx context.Context, field grap
 		return ec.fieldContext_PageInfo_hasNextPage(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type PageInfo", field.Name)
-}
-
-func (ec *executionContext) childFields_PredictionChange(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-	switch field.Name {
-	case "match":
-		return ec.fieldContext_PredictionChange_match(ctx, field)
-	case "prediction":
-		return ec.fieldContext_PredictionChange_prediction(ctx, field)
-	case "deltaHome":
-		return ec.fieldContext_PredictionChange_deltaHome(ctx, field)
-	case "deltaDraw":
-		return ec.fieldContext_PredictionChange_deltaDraw(ctx, field)
-	case "deltaAway":
-		return ec.fieldContext_PredictionChange_deltaAway(ctx, field)
-	}
-	return nil, fmt.Errorf("no field named %q was found under type PredictionChange", field.Name)
 }
 
 func (ec *executionContext) childFields_Team(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -2684,38 +2611,6 @@ func (ec *executionContext) fieldContext_CompetitionMetric_sampleSize(_ context.
 	return graphql.NewScalarFieldContext("CompetitionMetric", field, false, false, "Int")
 }
 
-func (ec *executionContext) _Dashboard_liveMatches(ctx context.Context, field graphql.CollectedField, obj *model.Dashboard) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Dashboard_liveMatches(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.LiveMatches, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v []*model.Match) graphql.Marshaler {
-			return ec.marshalNMatch2ᚕᚖgithubᚗcomᚋtiagocastroᚋsinglescoreᚋbackendᚋinternalᚋgraphᚋmodelᚐMatchᚄ(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_Dashboard_liveMatches(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Dashboard",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.childFields_Match(ctx, field)
-		},
-	}
-	return fc, nil
-}
-
 func (ec *executionContext) _Dashboard_recentFinishedMatches(ctx context.Context, field graphql.CollectedField, obj *model.Dashboard) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -2743,38 +2638,6 @@ func (ec *executionContext) fieldContext_Dashboard_recentFinishedMatches(_ conte
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_Match(ctx, field)
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Dashboard_recentPredictionChanges(ctx context.Context, field graphql.CollectedField, obj *model.Dashboard) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Dashboard_recentPredictionChanges(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.RecentPredictionChanges, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v []*model.PredictionChange) graphql.Marshaler {
-			return ec.marshalNPredictionChange2ᚕᚖgithubᚗcomᚋtiagocastroᚋsinglescoreᚋbackendᚋinternalᚋgraphᚋmodelᚐPredictionChangeᚄ(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_Dashboard_recentPredictionChanges(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Dashboard",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.childFields_PredictionChange(ctx, field)
 		},
 	}
 	return fc, nil
@@ -3982,16 +3845,16 @@ func (ec *executionContext) fieldContext_Match_benchmarkPredictions(_ context.Co
 	return fc, nil
 }
 
-func (ec *executionContext) _Match_latestModelPrediction(ctx context.Context, field graphql.CollectedField, obj *model.Match) (ret graphql.Marshaler) {
+func (ec *executionContext) _Match_preMatchPrediction(ctx context.Context, field graphql.CollectedField, obj *model.Match) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
 		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Match_latestModelPrediction(ctx, field)
+			return ec.fieldContext_Match_preMatchPrediction(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
-			return obj.LatestModelPrediction, nil
+			return obj.PreMatchPrediction, nil
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *model.ModelPrediction) graphql.Marshaler {
@@ -4001,7 +3864,7 @@ func (ec *executionContext) _Match_latestModelPrediction(ctx context.Context, fi
 		false,
 	)
 }
-func (ec *executionContext) fieldContext_Match_latestModelPrediction(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Match_preMatchPrediction(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Match",
 		Field:      field,
@@ -5235,139 +5098,6 @@ func (ec *executionContext) _PageInfo_hasNextPage(ctx context.Context, field gra
 }
 func (ec *executionContext) fieldContext_PageInfo_hasNextPage(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("PageInfo", field, false, false, "Boolean")
-}
-
-func (ec *executionContext) _PredictionChange_match(ctx context.Context, field graphql.CollectedField, obj *model.PredictionChange) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_PredictionChange_match(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.Match, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *model.Match) graphql.Marshaler {
-			return ec.marshalNMatch2ᚖgithubᚗcomᚋtiagocastroᚋsinglescoreᚋbackendᚋinternalᚋgraphᚋmodelᚐMatch(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_PredictionChange_match(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "PredictionChange",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.childFields_Match(ctx, field)
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _PredictionChange_prediction(ctx context.Context, field graphql.CollectedField, obj *model.PredictionChange) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_PredictionChange_prediction(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.Prediction, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *model.ModelPrediction) graphql.Marshaler {
-			return ec.marshalNModelPrediction2ᚖgithubᚗcomᚋtiagocastroᚋsinglescoreᚋbackendᚋinternalᚋgraphᚋmodelᚐModelPrediction(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_PredictionChange_prediction(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "PredictionChange",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.childFields_ModelPrediction(ctx, field)
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _PredictionChange_deltaHome(ctx context.Context, field graphql.CollectedField, obj *model.PredictionChange) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_PredictionChange_deltaHome(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.DeltaHome, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
-			return ec.marshalNFloat2float64(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_PredictionChange_deltaHome(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("PredictionChange", field, false, false, "Float")
-}
-
-func (ec *executionContext) _PredictionChange_deltaDraw(ctx context.Context, field graphql.CollectedField, obj *model.PredictionChange) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_PredictionChange_deltaDraw(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.DeltaDraw, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
-			return ec.marshalNFloat2float64(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_PredictionChange_deltaDraw(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("PredictionChange", field, false, false, "Float")
-}
-
-func (ec *executionContext) _PredictionChange_deltaAway(ctx context.Context, field graphql.CollectedField, obj *model.PredictionChange) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_PredictionChange_deltaAway(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.DeltaAway, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
-			return ec.marshalNFloat2float64(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_PredictionChange_deltaAway(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("PredictionChange", field, false, false, "Float")
 }
 
 func (ec *executionContext) _Query_health(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -7194,18 +6924,8 @@ func (ec *executionContext) _Dashboard(ctx context.Context, sel ast.SelectionSet
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("Dashboard")
-		case "liveMatches":
-			out.Values[i] = ec._Dashboard_liveMatches(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
 		case "recentFinishedMatches":
 			out.Values[i] = ec._Dashboard_recentFinishedMatches(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "recentPredictionChanges":
-			out.Values[i] = ec._Dashboard_recentPredictionChanges(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -7579,8 +7299,8 @@ func (ec *executionContext) _Match(ctx context.Context, sel ast.SelectionSet, ob
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "latestModelPrediction":
-			out.Values[i] = ec._Match_latestModelPrediction(ctx, field, obj)
+		case "preMatchPrediction":
+			out.Values[i] = ec._Match_preMatchPrediction(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
@@ -8065,59 +7785,6 @@ func (ec *executionContext) _PageInfo(ctx context.Context, sel ast.SelectionSet,
 			}
 		case "hasNextPage":
 			out.Values[i] = ec._PageInfo_hasNextPage(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		default:
-			panic("unknown field " + strconv.Quote(field.Name))
-		}
-	}
-	out.Dispatch(ctx)
-	if out.Invalids > 0 {
-		return graphql.Null
-	}
-
-	if n := len(deferred.Defers); n > 0 {
-		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
-		ec.ProcessDeferredGroup(deferred)
-	}
-
-	return out
-}
-
-var predictionChangeImplementors = []string{"PredictionChange"}
-
-func (ec *executionContext) _PredictionChange(ctx context.Context, sel ast.SelectionSet, obj *model.PredictionChange) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, predictionChangeImplementors)
-
-	out := graphql.NewFieldSet(fields)
-	deferred := graphql.NewDeferredGroup(ctx)
-	for i, field := range fields {
-		switch field.Name {
-		case "__typename":
-			out.Values[i] = graphql.MarshalString("PredictionChange")
-		case "match":
-			out.Values[i] = ec._PredictionChange_match(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "prediction":
-			out.Values[i] = ec._PredictionChange_prediction(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "deltaHome":
-			out.Values[i] = ec._PredictionChange_deltaHome(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "deltaDraw":
-			out.Values[i] = ec._PredictionChange_deltaDraw(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "deltaAway":
-			out.Values[i] = ec._PredictionChange_deltaAway(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -9056,30 +8723,6 @@ func (ec *executionContext) marshalNPageInfo2ᚖgithubᚗcomᚋtiagocastroᚋsin
 		return graphql.Null
 	}
 	return ec._PageInfo(ctx, sel, v)
-}
-
-func (ec *executionContext) marshalNPredictionChange2ᚕᚖgithubᚗcomᚋtiagocastroᚋsinglescoreᚋbackendᚋinternalᚋgraphᚋmodelᚐPredictionChangeᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.PredictionChange) graphql.Marshaler {
-	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
-		fc := graphql.GetFieldContext(ctx)
-		fc.Result = &v[i]
-		return ec.marshalNPredictionChange2ᚖgithubᚗcomᚋtiagocastroᚋsinglescoreᚋbackendᚋinternalᚋgraphᚋmodelᚐPredictionChange(ctx, sel, v[i])
-	})
-
-	for _, e := range ret {
-		if e == graphql.Null {
-			return graphql.Null
-		}
-	}
-
-	return ret
-}
-
-func (ec *executionContext) marshalNPredictionChange2ᚖgithubᚗcomᚋtiagocastroᚋsinglescoreᚋbackendᚋinternalᚋgraphᚋmodelᚐPredictionChange(ctx context.Context, sel ast.SelectionSet, v *model.PredictionChange) graphql.Marshaler {
-	if v == nil {
-		graphql.AddInvalidNullError(ctx, "PredictionChange!")
-		return graphql.Null
-	}
-	return ec._PredictionChange(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNProvenance2githubᚗcomᚋtiagocastroᚋsinglescoreᚋbackendᚋinternalᚋgraphᚋmodelᚐProvenance(ctx context.Context, v any) (model.Provenance, error) {

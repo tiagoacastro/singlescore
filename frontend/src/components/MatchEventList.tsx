@@ -216,14 +216,7 @@ export function MatchEventList({ match }: Props) {
           </ul>
         </>
       ) : (
-        <EmptyState
-          title="No per-event data"
-          description={
-            match.provenance === 'LIVE'
-              ? "Per-event data (cards, subs, VAR) is ingested from api-football.com, whose free tier only covers the last 24h / today / tomorrow. Older matches with no goals have no event feed."
-              : undefined
-          }
-        />
+        <EmptyState title="No per-event data" />
       )}
     </div>
   );

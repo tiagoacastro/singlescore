@@ -21,10 +21,7 @@ import (
 	"github.com/tiagocastro/singlescore/backend/internal/config"
 	"github.com/tiagocastro/singlescore/backend/internal/db"
 	"github.com/tiagocastro/singlescore/backend/internal/graph"
-	"github.com/tiagocastro/singlescore/backend/internal/ingestion"
-	"github.com/tiagocastro/singlescore/backend/internal/ingestion/footballdata"
 	"github.com/tiagocastro/singlescore/backend/internal/logging"
-	"github.com/tiagocastro/singlescore/backend/internal/prediction"
 	"github.com/tiagocastro/singlescore/backend/internal/repository"
 	"github.com/tiagocastro/singlescore/backend/internal/service"
 )
@@ -65,38 +62,6 @@ func main() {
 	predsRepo := repository.NewPredictions(pool)
 	ingestRepo := repository.NewIngestion(pool)
 	svc := service.New(catalogRepo, matchesRepo, predsRepo, ingestRepo)
-
-	// Optional per-match live-focus refresher: when the token is set,
-	// every match(id) query for a LIVE/HALFTIME/near-kickoff match
-	// triggers a one-match upstream refresh (deduped per match by
-	// service.RefreshWindow so N concurrent viewers share one API call).
-	if token := strings.TrimSpace(os.Getenv("FOOTBALL_DATA_API_TOKEN")); token != "" {
-		fdClient, err := footballdata.New(token, footballdata.Options{})
-		if err != nil {
-			logger.Warn("match refresher disabled; footballdata client", "err", err)
-		} else {
-			provider := footballdata.NewProvider(fdClient, nil)
-			sync := ingestion.NewSync(ingestion.Deps{
-				Catalog:     catalogRepo,
-				Matches:     matchesRepo,
-				Predictions: predsRepo,
-				Ingestion:   ingestRepo,
-				Predictor:   prediction.NewBaseline(),
-				Logger:      logger,
-			}, provider, ingestion.SyncOptions{
-				RecordRun: false,
-				// Finished-match prediction snapshots are deterministic
-				// (model inputs are frozen) — skip regenerating them on
-				// every tick. ~19 upserts per finished match saved.
-				SkipFinishedWithFullTime: true,
-			})
-			svc = svc.WithRefresher(sync, logger)
-			logger.Info("per-match live-focus refresher enabled",
-				"dedupe_window", service.RefreshWindow.String())
-		}
-	} else {
-		logger.Info("per-match live-focus refresher disabled (no FOOTBALL_DATA_API_TOKEN set)")
-	}
 
 	resolver := graph.NewResolver(graph.Deps{
 		Pool:        pool,

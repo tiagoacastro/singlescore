@@ -2,39 +2,26 @@ import type { Match } from '@/graphql/types';
 import { EmptyState } from '@/components/EmptyState';
 
 type Props = {
-  match: Pick<Match, 'homeTeam' | 'awayTeam' | 'homeScore' | 'awayScore' | 'kickoffAt' | 'modelPredictions'>;
+  match: Pick<Match, 'homeTeam' | 'awayTeam' | 'homeScore' | 'awayScore' | 'kickoffAt' | 'preMatchPrediction'>;
 };
 
 function pct(p: number) {
   return `${Math.round(p * 100)}%`;
 }
 
-// MatchScoreCard shows the current scoreline and the "latest" model
-// probabilities. "Latest" = the snapshot at the highest minute present
-// in modelPredictions, which the user intuitively expects to see at
-// the top of a live match (last in-play tick) or a finished match
-// (full-time snapshot).
+// MatchScoreCard shows the final scoreline next to the model's pre-match
+// odds. Later snapshots of a finished match converge on the result
+// (100% for the winner), so they say nothing about the forecast.
 export function MatchScoreCard({ match }: Props) {
-  const preds = match.modelPredictions ?? [];
-  // When multiple model versions coexist, pin to the newest one before
-  // picking the highest-minute row — otherwise the triplet can
-  // disagree with the chart (which also filters to the latest model).
-  const latest = (() => {
-    if (preds.length === 0) return null;
-    const newest = preds.reduce((best, p) =>
-      !best || p.forecastAt > best.forecastAt ? p : best,
-    );
-    const active = preds.filter(
-      (p) => p.modelName === newest.modelName && p.modelVersion === newest.modelVersion,
-    );
-    return active.sort((a, b) => (b.matchMinute ?? 0) - (a.matchMinute ?? 0))[0];
-  })();
+  const preMatch = match.preMatchPrediction;
 
   return (
     <div className="card">
       <div className="card__header">
         <h2>Score</h2>
-        <span className="card__subtitle">kickoff {new Date(match.kickoffAt).toLocaleString()}</span>
+        <span className="card__subtitle">
+          kickoff {new Date(match.kickoffAt).toLocaleString()} · pre-match odds
+        </span>
       </div>
       <div
         style={{
@@ -50,23 +37,23 @@ export function MatchScoreCard({ match }: Props) {
         </div>
         <div style={{ fontSize: 18 }}>{match.awayTeam.name}</div>
       </div>
-      {latest ? (
+      {preMatch ? (
         <div className="prob-triplet">
           <div className="prob prob--home">
             <span className="prob__label">Home win</span>
-            <span className="prob__value">{pct(latest.pHome)}</span>
+            <span className="prob__value">{pct(preMatch.pHome)}</span>
           </div>
           <div className="prob prob--draw">
             <span className="prob__label">Draw</span>
-            <span className="prob__value">{pct(latest.pDraw)}</span>
+            <span className="prob__value">{pct(preMatch.pDraw)}</span>
           </div>
           <div className="prob prob--away">
             <span className="prob__label">Away win</span>
-            <span className="prob__value">{pct(latest.pAway)}</span>
+            <span className="prob__value">{pct(preMatch.pAway)}</span>
           </div>
         </div>
       ) : (
-        <EmptyState title="No model prediction yet" />
+        <EmptyState title="No pre-match prediction" />
       )}
     </div>
   );

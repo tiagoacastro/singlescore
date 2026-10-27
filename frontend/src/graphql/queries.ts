@@ -3,25 +3,6 @@ import { gql } from '@apollo/client';
 export const DASHBOARD_QUERY = gql`
   query Dashboard {
     dashboard {
-      liveMatches {
-        id
-        kickoffAt
-        status
-        minute
-        homeScore
-        awayScore
-        provenance
-        competition { id name country }
-        homeTeam { id name shortName }
-        awayTeam { id name shortName }
-        latestModelPrediction {
-          id
-          forecastAt
-          pHome
-          pDraw
-          pAway
-        }
-      }
       recentFinishedMatches {
         id
         kickoffAt
@@ -33,28 +14,7 @@ export const DASHBOARD_QUERY = gql`
         competition { id name }
         homeTeam { id name shortName }
         awayTeam { id name shortName }
-      }
-      recentPredictionChanges {
-        deltaHome
-        deltaDraw
-        deltaAway
-        prediction {
-          id
-          forecastAt
-          matchMinute
-          pHome
-          pDraw
-          pAway
-        }
-        match {
-          id
-          homeTeam { id shortName name }
-          awayTeam { id shortName name }
-          homeScore
-          awayScore
-          minute
-          status
-        }
+        preMatchPrediction { id pHome pDraw pAway forecastAt }
       }
       modelMetrics {
         modelName
@@ -104,7 +64,7 @@ export const MATCH_LIST_QUERY = gql`
           competition { id name }
           homeTeam { id name shortName }
           awayTeam { id name shortName }
-          latestModelPrediction { id pHome pDraw pAway forecastAt matchMinute }
+          preMatchPrediction { id pHome pDraw pAway forecastAt }
         }
       }
     }
@@ -157,6 +117,7 @@ export const MATCH_DETAIL_QUERY = gql`
         pAway
         provenance
       }
+      preMatchPrediction { id pHome pDraw pAway forecastAt }
       benchmarkPredictions {
         id
         provider

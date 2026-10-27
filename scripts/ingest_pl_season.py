@@ -82,8 +82,7 @@ HOME_ADVANTAGE = 60.0
 ELO_K = 20.0  # update coefficient; ClubElo-style with goal-diff multiplier
 INITIAL_ELO = 1500.0
 
-# Snapshot cadence for the retrospective timeline. 5-minute grid matches
-# `backend/internal/ingestion/predictions.go:finishedTimelineStepMin`.
+# Snapshot cadence for the retrospective timeline (5-minute grid).
 TIMELINE_STEP_MIN = 5
 
 

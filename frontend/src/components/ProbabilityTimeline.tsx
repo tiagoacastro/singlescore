@@ -13,10 +13,6 @@ import {
 import type { Match } from '@/graphql/types';
 import { EmptyState } from '@/components/EmptyState';
 
-// Statuses whose scoreline can still change — unused here but kept
-// alongside the chart's live-related concerns for proximity. Note:
-// polling cadence is owned by the page, not the chart.
-
 type ChartPoint = {
   minute: number;
   forecastAt: string;
@@ -50,12 +46,12 @@ type Props = {
 // chart plus goal / red-card markers along the X-axis.
 //
 // Data is derived from the match's `modelPredictions` (collapsed to
-// one point per unique minute — in-play ticks that landed on the same
+// one point per unique minute — snapshots that landed on the same
 // minute keep only the last write) and `events` (filtered to goals +
 // red cards, clamped to the 0-90 chart domain).
 export function ProbabilityTimeline({ match }: Props) {
   // chartData + markers are derived; useMemo stops Recharts from
-  // re-mounting on every parent re-render (e.g. a 12 s poll tick).
+  // re-mounting on every parent re-render.
   //
   // Filter: when multiple model versions coexist in the DB (we swap the
   // baseline from time to time), always render only the newest one so
@@ -204,7 +200,7 @@ export function ProbabilityTimeline({ match }: Props) {
         </div>
         <EmptyState
           title="No prediction snapshots yet"
-          description="Model snapshots are generated at kickoff, half-time and full-time, plus every live minute while the match is in play."
+          description="Model snapshots are generated at kickoff, half-time and full-time, plus each goal or red card."
         />
       </>
     );

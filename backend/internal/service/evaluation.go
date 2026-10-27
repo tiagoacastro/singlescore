@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"math"
 	"sort"
 	"time"
 
@@ -307,94 +306,14 @@ func computeBenchmarkGroups(
 	return out, matchesWithBench
 }
 
-// -------------------- recent-changes + live metrics --------------------
+// -------------------- dashboard metrics --------------------
 
-// recentPredictionChanges returns the N matches whose latest prediction
-// differs most (L1 norm) from the prior one. Powers the "biggest moves"
-// section of the dashboard.
-func (s *Service) recentPredictionChanges(ctx context.Context, limit int) ([]*model.PredictionChange, error) {
-	recents, err := s.predictions.RecentModelPredictions(ctx, 60)
-	if err != nil {
-		return nil, err
-	}
-	if len(recents) == 0 {
-		return []*model.PredictionChange{}, nil
-	}
-
-	// Group by match, newest first.
-	byMatch := map[string][]repository.ModelPrediction{}
-	for _, p := range recents {
-		byMatch[p.MatchID] = append(byMatch[p.MatchID], p)
-	}
-	type candidate struct {
-		matchID       string
-		latest, prev  repository.ModelPrediction
-		l1            float64
-	}
-	candidates := make([]candidate, 0, len(byMatch))
-	for mid, ps := range byMatch {
-		sort.Slice(ps, func(i, j int) bool { return ps[i].ForecastAt.After(ps[j].ForecastAt) })
-		if len(ps) < 2 {
-			continue
-		}
-		latest, prev := ps[0], ps[1]
-		l1 := math.Abs(latest.PHome-prev.PHome) +
-			math.Abs(latest.PDraw-prev.PDraw) +
-			math.Abs(latest.PAway-prev.PAway)
-		if l1 < 0.001 {
-			continue
-		}
-		candidates = append(candidates, candidate{matchID: mid, latest: latest, prev: prev, l1: l1})
-	}
-	sort.Slice(candidates, func(i, j int) bool { return candidates[i].l1 > candidates[j].l1 })
-	if limit > 0 && len(candidates) > limit {
-		candidates = candidates[:limit]
-	}
-	if len(candidates) == 0 {
-		return []*model.PredictionChange{}, nil
-	}
-
-	// Hydrate match contexts for the chosen candidates.
-	raws := make([]repository.Match, 0, len(candidates))
-	for _, c := range candidates {
-		m, err := s.matches.GetByID(ctx, c.matchID)
-		if err != nil {
-			return nil, err
-		}
-		if m != nil {
-			raws = append(raws, *m)
-		}
-	}
-	hyd, err := s.hydrateMatches(ctx, raws, false)
-	if err != nil {
-		return nil, err
-	}
-	byID := map[string]*model.Match{}
-	for _, m := range hyd {
-		byID[m.ID] = m
-	}
-
-	out := make([]*model.PredictionChange, 0, len(candidates))
-	for _, c := range candidates {
-		m, ok := byID[c.matchID]
-		if !ok {
-			continue
-		}
-		out = append(out, &model.PredictionChange{
-			Match:      m,
-			Prediction: toModelPredictionModel(c.latest),
-			DeltaHome:  c.latest.PHome - c.prev.PHome,
-			DeltaDraw:  c.latest.PDraw - c.prev.PDraw,
-			DeltaAway:  c.latest.PAway - c.prev.PAway,
-		})
-	}
-	return out, nil
-}
-
-// liveModelMetrics computes a Brier/log-loss summary over the LATEST
-// prediction per finished match, used by the dashboard mini-metrics
-// panel. Returns nil when there's nothing to score.
-func (s *Service) liveModelMetrics(ctx context.Context) (*model.EvaluationSummary, error) {
+// preMatchModelMetrics computes a Brier/log-loss summary over the
+// pre-match prediction per finished match, used by the dashboard
+// mini-metrics panel. Scoring a later snapshot would flatter the model
+// (the full-time row already knows the result). Returns nil when
+// there's nothing to score.
+func (s *Service) preMatchModelMetrics(ctx context.Context) (*model.EvaluationSummary, error) {
 	finals, err := s.predictions.AllFinishedResults(ctx)
 	if err != nil {
 		return nil, err
@@ -408,17 +327,17 @@ func (s *Service) liveModelMetrics(ctx context.Context) (*model.EvaluationSummar
 		ids = append(ids, f.MatchID)
 		finalBy[f.MatchID] = f.FinalResult
 	}
-	latestByMatch, err := s.predictions.LatestModelForMatches(ctx, ids)
+	preMatchByMatch, err := s.predictions.PreMatchModelForMatches(ctx, ids)
 	if err != nil {
 		return nil, err
 	}
-	if len(latestByMatch) == 0 {
+	if len(preMatchByMatch) == 0 {
 		return nil, nil
 	}
 	var preds []evaluation.Prediction
 	var modelName, modelVersion string
 	var dateFrom, dateTo *time.Time
-	for mid, p := range latestByMatch {
+	for mid, p := range preMatchByMatch {
 		actual, ok := finalBy[mid]
 		if !ok {
 			continue

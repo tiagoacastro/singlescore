@@ -56,14 +56,7 @@ export function BenchmarkTable({ match }: Props) {
           </tbody>
         </table>
       ) : (
-        <EmptyState
-          title="No benchmark predictions captured"
-          description={
-            match.provenance === 'LIVE'
-              ? 'football-data.org does not expose odds or external forecasts. Wire a market-odds adapter to populate this section.'
-              : undefined
-          }
-        />
+        <EmptyState title="No benchmark predictions captured" />
       )}
     </div>
   );

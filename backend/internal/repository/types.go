@@ -39,8 +39,6 @@ type MatchStatus string
 
 const (
 	StatusScheduled MatchStatus = "SCHEDULED"
-	StatusLive      MatchStatus = "LIVE"
-	StatusHalftime  MatchStatus = "HALFTIME"
 	StatusFinished  MatchStatus = "FINISHED"
 	StatusPostponed MatchStatus = "POSTPONED"
 	StatusCancelled MatchStatus = "CANCELLED"
@@ -62,7 +60,6 @@ const (
 	ProvenanceDemo       Provenance = "DEMO"
 	ProvenanceHistorical Provenance = "HISTORICAL"
 	ProvenanceReplay     Provenance = "REPLAY"
-	ProvenanceLive       Provenance = "LIVE"
 )
 
 // Match mirrors the matches table row (team ids resolved via join elsewhere).
@@ -107,24 +104,24 @@ type MatchEvent struct {
 // (1:1 with matches). All counts are nullable because the upstream
 // CSV may omit them for very old archive seasons.
 type MatchStats struct {
-	MatchID       string
-	HomeShots     *int
-	AwayShots     *int
-	HomeShotsOnT  *int
-	AwayShotsOnT  *int
-	HomeCorners   *int
-	AwayCorners   *int
-	HomeFouls     *int
-	AwayFouls     *int
-	HomeYellow    *int
-	AwayYellow    *int
-	HomeRed       *int
-	AwayRed       *int
-	HomeXG        *float64
-	AwayXG        *float64
-	Referee       *string
-	Source        string
-	UpdatedAt     time.Time
+	MatchID      string
+	HomeShots    *int
+	AwayShots    *int
+	HomeShotsOnT *int
+	AwayShotsOnT *int
+	HomeCorners  *int
+	AwayCorners  *int
+	HomeFouls    *int
+	AwayFouls    *int
+	HomeYellow   *int
+	AwayYellow   *int
+	HomeRed      *int
+	AwayRed      *int
+	HomeXG       *float64
+	AwayXG       *float64
+	Referee      *string
+	Source       string
+	UpdatedAt    time.Time
 }
 
 // MatchCommentary mirrors the match_commentary table row. One row per
@@ -145,22 +142,22 @@ type MatchCommentary struct {
 
 // ModelPrediction mirrors the model_predictions table row.
 type ModelPrediction struct {
-	ID               string
-	MatchID          string
-	ModelName        string
-	ModelVersion     string
-	ForecastAt       time.Time
-	MatchMinute      *int
-	HomeScoreAtFC    int
-	AwayScoreAtFC    int
-	HomeRedCardsFC   int
-	AwayRedCardsFC   int
-	PHome            float64
-	PDraw            float64
-	PAway            float64
-	FeaturesJSON     *string
-	Provenance       Provenance
-	SourceTimestamp  *time.Time
+	ID              string
+	MatchID         string
+	ModelName       string
+	ModelVersion    string
+	ForecastAt      time.Time
+	MatchMinute     *int
+	HomeScoreAtFC   int
+	AwayScoreAtFC   int
+	HomeRedCardsFC  int
+	AwayRedCardsFC  int
+	PHome           float64
+	PDraw           float64
+	PAway           float64
+	FeaturesJSON    *string
+	Provenance      Provenance
+	SourceTimestamp *time.Time
 }
 
 // BenchmarkPrediction mirrors the benchmark_predictions table row.

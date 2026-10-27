@@ -20,12 +20,10 @@ func (r *queryResolver) Health(ctx context.Context) (*model.Health, error) {
 func (r *queryResolver) Dashboard(ctx context.Context) (*model.Dashboard, error) {
 	if r.deps.Service == nil {
 		return &model.Dashboard{
-			LiveMatches:             []*model.Match{},
-			RecentFinishedMatches:   []*model.Match{},
-			RecentPredictionChanges: []*model.PredictionChange{},
-			ModelMetrics:            nil,
-			DataSources:             []*model.DataSourceStatus{},
-			SystemStatus:            r.buildHealth(ctx),
+			RecentFinishedMatches: []*model.Match{},
+			ModelMetrics:          nil,
+			DataSources:           []*model.DataSourceStatus{},
+			SystemStatus:          r.buildHealth(ctx),
 		}, nil
 	}
 	dash, err := r.deps.Service.Dashboard(ctx)

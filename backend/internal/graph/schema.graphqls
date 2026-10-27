@@ -2,11 +2,11 @@
 
 scalar Time
 
-enum MatchStatus { SCHEDULED LIVE HALFTIME FINISHED POSTPONED CANCELLED }
+enum MatchStatus { SCHEDULED FINISHED POSTPONED CANCELLED }
 enum Outcome { HOME DRAW AWAY }
-enum Provenance { DEMO HISTORICAL REPLAY LIVE }
+enum Provenance { DEMO HISTORICAL REPLAY }
 enum BenchmarkSourceType { ALGORITHM MARKET_ODDS MANUAL }
-enum BenchmarkHorizon { PRE_MATCH LIVE }
+enum BenchmarkHorizon { PRE_MATCH }
 
 type Query {
   health: Health!
@@ -126,7 +126,8 @@ type Match {
   stats: MatchStats
   modelPredictions: [ModelPrediction!]!
   benchmarkPredictions: [BenchmarkPrediction!]!
-  latestModelPrediction: ModelPrediction
+  """Model prediction made before kickoff (the original odds)."""
+  preMatchPrediction: ModelPrediction
 }
 
 type MatchEdge {
@@ -145,14 +146,6 @@ type MatchConnection {
   totalCount: Int!
 }
 
-type PredictionChange {
-  match: Match!
-  prediction: ModelPrediction!
-  deltaHome: Float!
-  deltaDraw: Float!
-  deltaAway: Float!
-}
-
 type DataSourceStatus {
   provider: String!
   jobName: String!
@@ -164,9 +157,7 @@ type DataSourceStatus {
 }
 
 type Dashboard {
-  liveMatches: [Match!]!
   recentFinishedMatches: [Match!]!
-  recentPredictionChanges: [PredictionChange!]!
   modelMetrics: EvaluationSummary
   dataSources: [DataSourceStatus!]!
   systemStatus: Health!

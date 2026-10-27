@@ -28,7 +28,7 @@ const ATTEMPT_KINDS = new Set(Object.keys(KIND_SPEC));
 // right edge rather than falling off the chart.
 const X_MIN = 0;
 const X_MAX = 100;
-const WIDTH = 900;
+const WIDTH = 1130;
 const HEIGHT = 170;
 const PAD_X = 96;
 const PAD_Y = 30;

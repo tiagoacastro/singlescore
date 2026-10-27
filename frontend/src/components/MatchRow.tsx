@@ -14,7 +14,9 @@ function pct(p: number): string {
 export function MatchRow({ match, showProbabilities = false }: MatchRowProps) {
   const home = match.homeTeam.shortName ?? match.homeTeam.name;
   const away = match.awayTeam.shortName ?? match.awayTeam.name;
-  const prob = match.latestModelPrediction;
+  // Pre-match odds: later snapshots of a finished match converge on
+  // the result (100% for the winner), which says nothing about the forecast.
+  const prob = match.preMatchPrediction;
 
   return (
     <Link to={`/matches/${match.id}`} className="match-row" aria-label={`${home} vs ${away}`}>
@@ -26,7 +28,7 @@ export function MatchRow({ match, showProbabilities = false }: MatchRowProps) {
           {match.homeScore} <span style={{ opacity: 0.4 }}>·</span> {match.awayScore}
         </div>
         <div className="status" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <MatchStatusChip status={match.status} minute={match.minute} />
+          <MatchStatusChip status={match.status} />
           <ProvenanceChip provenance={match.provenance} />
         </div>
       </div>

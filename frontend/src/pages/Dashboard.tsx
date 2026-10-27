@@ -24,7 +24,6 @@ function fmtRelative(iso: string | null | undefined): string {
 
 export function DashboardPage() {
   const { data, loading, error } = useQuery<{ dashboard: Dashboard }>(DASHBOARD_QUERY, {
-    pollInterval: 15000,
     errorPolicy: 'all',
   });
   const dash = data?.dashboard;
@@ -49,7 +48,7 @@ export function DashboardPage() {
         <div className="card">
           <div className="card__header">
             <h3>Model Brier score</h3>
-            <span className="card__subtitle">lower is better</span>
+            <span className="card__subtitle">pre-match</span>
           </div>
           <div className="metric">
             <span className="metric__value">
@@ -66,7 +65,7 @@ export function DashboardPage() {
         <div className="card">
           <div className="card__header">
             <h3>Model log loss</h3>
-            <span className="card__subtitle">lower is better</span>
+            <span className="card__subtitle">pre-match</span>
           </div>
           <div className="metric">
             <span className="metric__value">
@@ -80,7 +79,7 @@ export function DashboardPage() {
         <div className="card">
           <div className="card__header">
             <h3>System</h3>
-            <span className="card__subtitle">live status</span>
+            <span className="card__subtitle">status</span>
           </div>
           <div className="metric">
             <span className="metric__value" style={{ fontSize: 20 }}>
@@ -101,13 +100,11 @@ export function DashboardPage() {
         </div>
       </section>
 
-      <section className="grid grid--2up" style={{ marginTop: 24 }} aria-label="Live and recent">
+      <section className="grid grid--2up" style={{ marginTop: 24 }} aria-label="Recent matches">
         <div className="card">
           <div className="card__header">
-            <h2>Live matches</h2>
-            <span className="card__subtitle">
-              {dash?.liveMatches.length ?? 0} tracked
-            </span>
+            <h2>Recent finished matches</h2>
+            <span className="card__subtitle">pre-match odds</span>
           </div>
           {loading && !dash ? (
             <>
@@ -115,17 +112,14 @@ export function DashboardPage() {
               <div className="skeleton skeleton--row" />
               <div className="skeleton skeleton--row" />
             </>
-          ) : dash?.liveMatches.length ? (
+          ) : dash?.recentFinishedMatches.length ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {dash.liveMatches.map((m) => (
+              {dash.recentFinishedMatches.map((m) => (
                 <MatchRow key={m.id} match={m} showProbabilities />
               ))}
             </div>
           ) : (
-            <EmptyState
-              title="No live matches right now"
-              description="Live matches will appear here while they're in progress."
-            />
+            <EmptyState title="No completed matches yet" />
           )}
         </div>
 
@@ -164,83 +158,11 @@ export function DashboardPage() {
           ) : (
             <EmptyState
               title="No ingestion runs yet"
-              description="Run the demo seeder or configure a provider to populate this list."
+              description="Run the hourly ingest notebooks to populate this list."
             />
           )}
         </div>
       </section>
-
-      <section className="card" style={{ marginTop: 24 }} aria-label="Recent finished matches">
-        <div className="card__header">
-          <h2>Recent finished matches</h2>
-          <span className="card__subtitle">
-            {dash?.recentFinishedMatches.length ?? 0}
-          </span>
-        </div>
-        {dash?.recentFinishedMatches.length ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {dash.recentFinishedMatches.map((m) => (
-              <MatchRow key={m.id} match={m} />
-            ))}
-          </div>
-        ) : (
-          <EmptyState title="No completed matches yet" />
-        )}
-      </section>
-
-      <section className="card" style={{ marginTop: 24 }} aria-label="Recent prediction changes">
-        <div className="card__header">
-          <h2>Recent prediction changes</h2>
-          <span className="card__subtitle">largest moves in the last snapshot</span>
-        </div>
-        {dash?.recentPredictionChanges?.length ? (
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 8 }}>
-            {dash.recentPredictionChanges.map((pc, i) => (
-              <li
-                key={pc.prediction.id ?? i}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1.4fr auto 1.4fr',
-                  gap: 12,
-                  alignItems: 'center',
-                  padding: '10px 12px',
-                  borderRadius: 8,
-                  background: '#141924',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <strong>{pc.match.homeTeam.shortName ?? pc.match.homeTeam.name}</strong>
-                  <span style={{ color: '#6c7891' }}>vs</span>
-                  <strong>{pc.match.awayTeam.shortName ?? pc.match.awayTeam.name}</strong>
-                </div>
-                <div style={{ fontSize: 12, color: '#9aa6ba' }}>
-                  {pc.match.status.toLowerCase()}{' '}
-                  {pc.match.minute != null ? `${pc.match.minute}'` : ''}
-                </div>
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'flex-end',
-                    gap: 10,
-                    fontFeatureSettings: '"tnum"',
-                  }}
-                >
-                  <span style={{ color: '#38d996' }}>H {signed(pc.deltaHome)}</span>
-                  <span style={{ color: '#9aa6ba' }}>D {signed(pc.deltaDraw)}</span>
-                  <span style={{ color: '#ff7fa3' }}>A {signed(pc.deltaAway)}</span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <EmptyState title="No prediction snapshots yet" />
-        )}
-      </section>
     </>
   );
-}
-
-function signed(x: number): string {
-  const n = Math.round(x * 100);
-  return `${n > 0 ? '+' : ''}${n}%`;
 }

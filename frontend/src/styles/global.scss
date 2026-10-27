@@ -18,6 +18,13 @@
   @include at-least($bp-md) {
     padding: $space-8 $space-6;
   }
+
+}
+
+// Match detail: room for the event timeline column beside the panels.
+.app-shell--wide {
+  .app-main,
+  .nav__inner { max-width: $content-max-width-wide; }
 }
 
 // Navigation ---------------------------------------------------------
@@ -81,7 +88,6 @@
 .chip {
   @include pill($color-bg-hover, $color-text-secondary);
 
-  &--live    { @include pill(rgba($color-success, 0.15), $color-success); }
   &--demo    { @include pill(rgba($color-accent, 0.15), $color-accent); }
   &--replay  { @include pill(rgba($color-warning, 0.15), $color-warning); }
   &--historical { @include pill(rgba($color-text-muted, 0.2), $color-text-secondary); }
@@ -112,6 +118,19 @@
       text-transform: uppercase;
       letter-spacing: 0.08em;
     }
+  }
+}
+
+// Match detail: panels stacked on the left, event timeline on the right
+// growing to its own height instead of stretching the panels beside it.
+.match-layout {
+  display: grid;
+  gap: $space-5;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+
+  @include at-least($bp-lg) {
+    grid-template-columns: minmax(0, 1fr) 400px;
   }
 }
 
