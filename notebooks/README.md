@@ -24,7 +24,7 @@ file per run). CSV includes:
 | `competitions`          | 1 (Premier League 2026/27)        |
 | `teams`                 | 20 (with chronologically-updated Elo) |
 | `matches`               | ~80 (one row per fixture)         |
-| `model_predictions`     | ~1 520 (19 snapshots per played match) |
+| `model_predictions`     | ~1 700 (5-min grid + HT + FT + one per goal / red-card minute, from ESPN `match_events` when they agree with the CSV score, else HT/FT approximation) |
 | `benchmark_predictions` | ~80 (one market-consensus row per played match) |
 | `match_stats`           | ~80 (xG, shots, SOT, corners, fouls, cards, referee per played match) |
 | `data_ingestion_runs`   | 1 (keyed on `provider|yyyy-mm-ddTHH`) |

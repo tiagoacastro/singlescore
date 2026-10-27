@@ -146,8 +146,14 @@ What it populates per run (fully idempotent — deterministic SHA-1 UUIDs
 - One `competitions` row (Premier League 2026/27)
 - 20 `teams` rows with chronologically-updated Elo ratings
 - ~80 `matches` rows
-- ~1 520 `model_predictions` (19-point retrospective timeline per played
-  match, using the `elo-poisson v0.2.0` baseline shared with the Go backend)
+- ~1 700 `model_predictions` (retrospective timeline per played match,
+  using the `elo-poisson v0.2.0` baseline shared with the Go backend): a
+  5-minute grid + half-time + full-time, plus a snapshot at every goal /
+  red-card minute. Scorelines and red cards come from the ESPN
+  `match_events` below when their goals add up to the CSV final score
+  (`features_json.score_source = "events"`); otherwise they fall back to
+  the HT/FT approximation. A brand-new match picks up its event-driven
+  timeline on the next hourly run after the ESPN notebook has scraped it.
 - ~80 `benchmark_predictions` (market-consensus pre-match row per
   played match, derived from the Avg / Bet365 1X2 odds columns)
 - One `data_ingestion_runs` row (keyed on `provider|yyyy-mm-ddTHH`)

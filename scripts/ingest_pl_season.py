@@ -277,7 +277,11 @@ class Context:
     stats_rows: list[tuple]
 
 
-def build_rows(df: pd.DataFrame) -> Context:
+def build_rows(
+    df: pd.DataFrame,
+    events_by_match: dict[str, list[TimelineEvent]] | None = None,
+) -> Context:
+    events_by_match = events_by_match or {}
     comp_id = det_id("competition", f"{PROVIDER}|{COMPETITION_EXT_ID}")
     now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
@@ -373,6 +377,7 @@ def build_rows(df: pd.DataFrame) -> Context:
                     as_ht=as_ht,
                     hs_ft=hs_ft,
                     as_ft=as_ft,
+                    events=events_by_match.get(match_id),
                 )
             )
             bench = _make_benchmark_row(
@@ -440,6 +445,65 @@ def build_rows(df: pd.DataFrame) -> Context:
     )
 
 
+@dataclass(frozen=True)
+class TimelineEvent:
+    minute: int
+    added: int
+    kind: str  # GOAL | RED_CARD (own goals arrive already credited to the beneficiary)
+    side: str  # HOME | AWAY
+
+
+def load_timeline_events(conn) -> dict[str, list[TimelineEvent]]:
+    """Goals and red cards per match from the ESPN scrape, ordered by
+    on-pitch time. Every match ESPN covered gets an entry, so a 0-0 with
+    no reds maps to [] (real "nothing happened") rather than being
+    missing (no per-event data at all)."""
+    out: dict[str, list[TimelineEvent]] = {}
+    with conn.cursor() as cur:
+        cur.execute("SELECT DISTINCT match_id FROM match_events WHERE provider = 'espn'")
+        for (match_id,) in cur.fetchall():
+            out[match_id] = []
+        cur.execute(
+            """SELECT match_id, event_type, team_side, minute, COALESCE(added_minute, 0)
+               FROM match_events
+               WHERE provider = 'espn'
+                 AND event_type IN ('GOAL', 'OWN_GOAL', 'RED_CARD')
+                 AND team_side IN ('HOME', 'AWAY')
+                 AND minute IS NOT NULL
+               ORDER BY match_id, minute, added_minute"""
+        )
+        for match_id, etype, side, minute, added in cur.fetchall():
+            kind = "RED_CARD" if etype == "RED_CARD" else "GOAL"
+            out[match_id].append(TimelineEvent(int(minute), int(added), kind, side))
+    return out
+
+
+def _events_match_score(events: list[TimelineEvent], hs_ft: int, as_ft: int) -> bool:
+    goals_h = sum(1 for e in events if e.kind == "GOAL" and e.side == "HOME")
+    goals_a = sum(1 for e in events if e.kind == "GOAL" and e.side == "AWAY")
+    return goals_h == hs_ft and goals_a == as_ft
+
+
+def _state_at(events: list[TimelineEvent], minute: int) -> tuple[int, int, int, int]:
+    """(home goals, away goals, home reds, away reds) after everything
+    up to and including `minute` (stoppage-time events count towards
+    their base minute, so a 45'+3 goal is in the half-time state)."""
+    hs = as_ = hr = ar = 0
+    for e in events:
+        if e.minute > minute:
+            break
+        if e.kind == "GOAL":
+            if e.side == "HOME":
+                hs += 1
+            else:
+                as_ += 1
+        elif e.side == "HOME":
+            hr += 1
+        else:
+            ar += 1
+    return hs, as_, hr, ar
+
+
 def _make_prediction_rows(
     match_id: str,
     kickoff: datetime,
@@ -449,22 +513,35 @@ def _make_prediction_rows(
     as_ht: int,
     hs_ft: int | None,
     as_ft: int | None,
+    events: list[TimelineEvent] | None = None,
 ) -> list[tuple]:
-    """Produce the same 19-point retrospective timeline the Go backend
-    writes for FINISHED matches, plus a pre-match row for everything
-    (even unplayed fixtures).
+    """Retrospective timeline for a match: a pre-match row for every
+    fixture, and for played matches a 5-minute grid + half-time +
+    full-time.
 
-    Scoreline model between observations: 0-0 before minute 45, HT
-    scoreline from minute 45 up to just before minute 90, FT scoreline
-    at minute 90. This matches the backend's HT/FT-approximation
-    strategy used when no per-event feed is available.
+    When per-event data is available and its goals add up to the CSV
+    final score, the scoreline and red cards at each snapshot come from
+    the real events and an extra "goal-event"/"red-card-event" snapshot
+    is written at each event minute. Otherwise the scoreline falls back
+    to the HT/FT approximation (0-0 before 45', HT score until 90').
     """
     out: list[tuple] = []
+    use_events = (
+        events is not None
+        and hs_ft is not None
+        and as_ft is not None
+        and _events_match_score(events, hs_ft, as_ft)
+    )
+    score_source = "events" if use_events else "ht-ft-approximation"
 
-    def add(minute: int, hs: int, as_: int, origin: str, forecast_at: datetime):
+    def add(
+        minute: int, hs: int, as_: int, origin: str, forecast_at: datetime,
+        hr: int = 0, ar: int = 0,
+    ):
         p_h, p_d, p_a = predict(
             home_elo=home_elo, away_elo=away_elo,
             home_score=hs, away_score=as_, minute=minute,
+            home_red=hr, away_red=ar,
         )
         features = {
             "home_elo": home_elo,
@@ -472,10 +549,13 @@ def _make_prediction_rows(
             "minute": minute,
             "home_score": hs,
             "away_score": as_,
+            "home_red": hr,
+            "away_red": ar,
             "home_advantage": HOME_ADVANTAGE,
             "model": MODEL_NAME,
             "model_version": MODEL_VERSION,
             "source_provider": PROVIDER,
+            "score_source": score_source,
             "origin": origin,
         }
         pred_id = det_id(
@@ -492,8 +572,8 @@ def _make_prediction_rows(
                 None if minute == 0 else minute,
                 hs,
                 as_,
-                0,
-                0,
+                hr,
+                ar,
                 p_h,
                 p_d,
                 p_a,
@@ -509,6 +589,30 @@ def _make_prediction_rows(
         0, 0, 0, "pre-match", kickoff - timedelta(hours=1),
     )
     if hs_ft is None or as_ft is None:
+        return out
+
+    if use_events:
+        grid = set(range(5, 90, TIMELINE_STEP_MIN)) | {45, 90}
+        for minute in range(5, 90, TIMELINE_STEP_MIN):
+            if minute == 45:
+                continue
+            hs, as_, hr, ar = _state_at(events, minute)
+            add(minute, hs, as_, "reconstructed-5min",
+                kickoff + timedelta(minutes=minute), hr, ar)
+        seen: set[int] = set()
+        for e in events:
+            # Grid snapshots at the same minute already include the event.
+            if e.minute in grid or e.minute in seen or e.minute <= 0:
+                continue
+            seen.add(e.minute)
+            hs, as_, hr, ar = _state_at(events, e.minute)
+            origin = "goal-event" if e.kind == "GOAL" else "red-card-event"
+            add(e.minute, hs, as_, origin,
+                kickoff + timedelta(minutes=e.minute + e.added), hr, ar)
+        hs, as_, hr, ar = _state_at(events, 45)
+        add(45, hs, as_, "half-time", kickoff + timedelta(minutes=45), hr, ar)
+        _, _, hr, ar = _state_at(events, 200)
+        add(90, hs_ft, as_ft, "full-time", kickoff + timedelta(minutes=90), hr, ar)
         return out
 
     # Reconstructed grid: 5, 10, ..., 85 (skip 0, 45, 90 — they get
@@ -788,19 +892,37 @@ def main() -> int:
 
     t0 = time.time()
     df = fetch_csv()
-    ctx = build_rows(df)
-
-    print(
-        f"[build] teams={len(ctx.team_rows)} "
-        f"matches={len(ctx.match_rows)} "
-        f"preds={len(ctx.pred_rows)} "
-        f"benchmarks={len(ctx.bench_rows)} "
-        f"stats={len(ctx.stats_rows)}"
-    )
 
     conn = connect()
     try:
+        events_by_match = load_timeline_events(conn)
+        ctx = build_rows(df, events_by_match)
+        event_driven = sorted({
+            r[1] for r in ctx.pred_rows
+            if json.loads(r[13]).get("score_source") == "events"
+        })
+        played = sum(1 for r in ctx.match_rows if r[7] == "FINISHED")
+        print(
+            f"[build] teams={len(ctx.team_rows)} "
+            f"matches={len(ctx.match_rows)} "
+            f"preds={len(ctx.pred_rows)} "
+            f"benchmarks={len(ctx.bench_rows)} "
+            f"stats={len(ctx.stats_rows)} "
+            f"event-driven timelines={len(event_driven)}/{played}"
+        )
         with conn.cursor() as cur:
+            # Event-minute snapshots move if ESPN corrects a minute, so
+            # drop them before re-inserting the current set.
+            for chunk in _chunked(event_driven, 500):
+                ph = ",".join(["%s"] * len(chunk))
+                cur.execute(
+                    f"""DELETE FROM model_predictions
+                        WHERE model_name = %s AND model_version = %s
+                          AND match_id IN ({ph})
+                          AND JSON_EXTRACT_STRING(features_json, 'origin')
+                              IN ('goal-event', 'red-card-event')""",
+                    (MODEL_NAME, MODEL_VERSION, *chunk),
+                )
             upsert_many(cur, "competitions", COMP_COLS, COMP_UPDATE, [ctx.comp_row])
             upsert_many(cur, "teams", TEAM_COLS, TEAM_UPDATE, ctx.team_rows)
             upsert_many(cur, "matches", MATCH_COLS, MATCH_UPDATE, ctx.match_rows)
