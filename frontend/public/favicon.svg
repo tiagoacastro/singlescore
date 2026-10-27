@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- "S." monogram mirroring the nav brand (SingleScore + accent dot). -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#151c28"/>
+      <stop offset="1" stop-color="#07090d"/>
+    </linearGradient>
+    <linearGradient id="ink" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#c9d3e2"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#4c9aff" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#4c9aff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="13.25" fill="none" stroke="#25304a" stroke-width="1.5"/>
+  <!-- Two tangent circles (centres 28,22.5 and 28,41.5) form the S. -->
+  <path d="M35.78 17.05 A9.5 9.5 0 1 0 28 32 A9.5 9.5 0 1 1 20.22 46.95"
+        fill="none" stroke="url(#ink)" stroke-width="7.2" stroke-linecap="round"/>
+  <circle cx="44.5" cy="50" r="9" fill="url(#glow)"/>
+  <circle cx="44.5" cy="50" r="4.6" fill="#4c9aff"/>
+</svg>
