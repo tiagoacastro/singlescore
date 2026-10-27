@@ -1,0 +1,57 @@
+@use 'sass:color';
+@use './tokens' as *;
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background: $color-bg-base;
+  color: $color-text-primary;
+  font-family: $font-family-sans;
+  font-size: $fs-base;
+  line-height: $lh-normal;
+  font-feature-settings: 'cv11', 'ss01';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background:
+    radial-gradient(900px 500px at 10% -5%, rgba($color-accent, 0.06), transparent 60%),
+    radial-gradient(1000px 600px at 120% -10%, rgba($color-success, 0.04), transparent 60%),
+    $color-bg-base;
+}
+
+a {
+  color: $color-accent;
+  text-decoration: none;
+  &:hover { color: color.adjust($color-accent, $lightness: 10%); }
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+h1, h2, h3, h4, h5 { margin: 0; font-weight: $fw-semibold; letter-spacing: -0.01em; }
+p { margin: 0; }
+
+input, select, textarea {
+  font: inherit;
+  color: inherit;
+  background: $color-bg-raised;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
+  padding: $space-2 $space-3;
+  &:focus-visible { outline: none; border-color: $color-accent; }
+}
+
+::selection {
+  background: rgba($color-accent, 0.35);
+  color: $color-text-primary;
+}

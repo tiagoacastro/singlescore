@@ -1,0 +1,55 @@
+@use './tokens' as *;
+
+@mixin card {
+  background: $color-bg-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-sm;
+}
+
+@mixin card-raised {
+  @include card;
+  box-shadow: $shadow-md;
+  background: $color-bg-raised;
+}
+
+@mixin focus-ring {
+  outline: none;
+  box-shadow: 0 0 0 2px $color-bg-base, 0 0 0 4px rgba($color-accent, 0.55);
+}
+
+@mixin pill($bg, $fg) {
+  display: inline-flex;
+  align-items: center;
+  gap: $space-1;
+  padding: 2px $space-2;
+  border-radius: $radius-pill;
+  background: $bg;
+  color: $fg;
+  font-size: $fs-xs;
+  font-weight: $fw-semibold;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+@mixin skeleton {
+  background: linear-gradient(
+    90deg,
+    $color-bg-surface,
+    $color-bg-hover,
+    $color-bg-surface
+  );
+  background-size: 200% 100%;
+  animation: ss-skeleton 1.3s ease-in-out infinite;
+  border-radius: $radius-sm;
+}
+
+@keyframes ss-skeleton {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+// Responsive breakpoint helper
+@mixin at-least($bp) {
+  @media (min-width: $bp) { @content; }
+}

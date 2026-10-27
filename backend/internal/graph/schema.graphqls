@@ -1,0 +1,193 @@
+"""SingleScore GraphQL schema v1."""
+
+scalar Time
+
+enum MatchStatus { SCHEDULED LIVE HALFTIME FINISHED POSTPONED CANCELLED }
+enum Outcome { HOME DRAW AWAY }
+enum Provenance { DEMO HISTORICAL REPLAY LIVE }
+enum BenchmarkSourceType { ALGORITHM MARKET_ODDS MANUAL }
+enum BenchmarkHorizon { PRE_MATCH LIVE }
+
+type Query {
+  health: Health!
+  dashboard: Dashboard!
+  competitions: [Competition!]!
+  matches(status: MatchStatus, first: Int = 20, after: String): MatchConnection!
+  match(id: ID!): Match
+  modelEvaluation(modelName: String, modelVersion: String): EvaluationReport!
+}
+
+type Health {
+  status: String!
+  databaseReachable: Boolean!
+  demoMode: Boolean!
+  version: String!
+  startedAt: Time!
+}
+
+type Competition {
+  id: ID!
+  name: String!
+  country: String
+  season: String
+  logoUrl: String
+}
+
+type Team {
+  id: ID!
+  name: String!
+  shortName: String
+  country: String
+  eloRating: Float
+  logoUrl: String
+}
+
+type MatchEvent {
+  id: ID!
+  eventType: String!
+  teamSide: String
+  minute: Int
+  addedMinute: Int
+  description: String
+  eventTime: Time!
+}
+
+type ModelPrediction {
+  id: ID!
+  modelName: String!
+  modelVersion: String!
+  forecastAt: Time!
+  matchMinute: Int
+  homeScoreAtForecast: Int!
+  awayScoreAtForecast: Int!
+  pHome: Float!
+  pDraw: Float!
+  pAway: Float!
+  provenance: Provenance!
+}
+
+type BenchmarkPrediction {
+  id: ID!
+  provider: String!
+  sourceType: BenchmarkSourceType!
+  horizon: BenchmarkHorizon!
+  forecastAt: Time!
+  matchMinute: Int
+  pHome: Float!
+  pDraw: Float!
+  pAway: Float!
+  provenance: Provenance!
+}
+
+type Match {
+  id: ID!
+  competition: Competition!
+  homeTeam: Team!
+  awayTeam: Team!
+  kickoffAt: Time!
+  status: MatchStatus!
+  minute: Int
+  homeScore: Int!
+  awayScore: Int!
+  finalResult: Outcome
+  provenance: Provenance!
+  venue: String
+  events: [MatchEvent!]!
+  modelPredictions: [ModelPrediction!]!
+  benchmarkPredictions: [BenchmarkPrediction!]!
+  latestModelPrediction: ModelPrediction
+}
+
+type MatchEdge {
+  node: Match!
+  cursor: String!
+}
+
+type PageInfo {
+  endCursor: String
+  hasNextPage: Boolean!
+}
+
+type MatchConnection {
+  edges: [MatchEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type PredictionChange {
+  match: Match!
+  prediction: ModelPrediction!
+  deltaHome: Float!
+  deltaDraw: Float!
+  deltaAway: Float!
+}
+
+type DataSourceStatus {
+  provider: String!
+  jobName: String!
+  lastRunAt: Time
+  lastStatus: String
+  recordsIn: Int!
+  recordsOut: Int!
+  errorMessage: String
+}
+
+type Dashboard {
+  liveMatches: [Match!]!
+  recentFinishedMatches: [Match!]!
+  recentPredictionChanges: [PredictionChange!]!
+  modelMetrics: EvaluationSummary
+  dataSources: [DataSourceStatus!]!
+  systemStatus: Health!
+}
+
+type EvaluationSummary {
+  modelName: String!
+  modelVersion: String!
+  sampleSize: Int!
+  brierScore: Float!
+  logLoss: Float!
+  accuracy: Float!
+  dateRangeFrom: Time
+  dateRangeTo: Time
+}
+
+type CalibrationBin {
+  binLow: Float!
+  binHigh: Float!
+  avgPredicted: Float!
+  observedFrequency: Float!
+  sampleSize: Int!
+}
+
+type MinuteBucketMetric {
+  minuteBucket: String!
+  brierScore: Float!
+  logLoss: Float!
+  sampleSize: Int!
+}
+
+type CompetitionMetric {
+  competition: Competition!
+  brierScore: Float!
+  logLoss: Float!
+  sampleSize: Int!
+}
+
+type BenchmarkEvaluationSummary {
+  provider: String!
+  horizon: BenchmarkHorizon!
+  sampleSize: Int!
+  brierScore: Float!
+  logLoss: Float!
+  accuracy: Float!
+}
+
+type EvaluationReport {
+  summary: EvaluationSummary
+  calibration: [CalibrationBin!]!
+  byMinuteBucket: [MinuteBucketMetric!]!
+  byCompetition: [CompetitionMetric!]!
+  benchmarks: [BenchmarkEvaluationSummary!]!
+  missingBenchmarkCoverage: Float!
+}

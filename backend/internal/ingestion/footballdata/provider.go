@@ -1,0 +1,207 @@
+package footballdata
+
+import (
+	"context"
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/tiagocastro/singlescore/backend/internal/ingestion"
+	"github.com/tiagocastro/singlescore/backend/internal/repository"
+)
+
+// ProviderName is the identifier we store in `provider` columns.
+const ProviderName = "football-data.org"
+
+// Provider implements ingestion.Provider against football-data.org.
+//
+// Scope v1 (free tier): PPL, PL, SA, PD, BL1 — the five leagues the
+// product currently supports. Anything outside this list is skipped at
+// the adapter boundary.
+type Provider struct {
+	client     *Client
+	comps      []string
+	capability []ingestion.Capability
+}
+
+// SupportedCompetitions is the whitelist of free-tier competitions we
+// pull. The order is used for round-robin fetching.
+var SupportedCompetitions = []string{"PPL", "PL", "SA", "PD", "BL1"}
+
+// NewProvider returns a Provider using the given client and the
+// restricted set of free-tier competitions we care about. Pass a custom
+// `comps` to scope further.
+func NewProvider(client *Client, comps []string) *Provider {
+	if len(comps) == 0 {
+		comps = append(comps, SupportedCompetitions...)
+	}
+	return &Provider{
+		client: client,
+		comps:  comps,
+		capability: []ingestion.Capability{
+			ingestion.CapFixtures,
+			ingestion.CapLiveState,
+		},
+	}
+}
+
+// Name reports the provider id.
+func (*Provider) Name() string { return ProviderName }
+
+// Capabilities reports what the provider can produce. Free tier does not
+// expose a goal-level event stream or predictions.
+func (p *Provider) Capabilities() []ingestion.Capability {
+	out := make([]ingestion.Capability, len(p.capability))
+	copy(out, p.capability)
+	return out
+}
+
+// FetchFixtures returns every scheduled, live, and finished match across
+// the configured competitions. Errors are returned per competition only
+// if ALL competitions fail; partial failures are logged into the
+// returned error summary (joined with ';').
+func (p *Provider) FetchFixtures(ctx context.Context) ([]ingestion.Fixture, error) {
+	out := make([]ingestion.Fixture, 0, 64)
+	var errMsgs []string
+	okAny := false
+	for _, code := range p.comps {
+		resp, err := p.client.GetCompetitionMatches(ctx, code)
+		if err != nil {
+			errMsgs = append(errMsgs, fmt.Sprintf("%s: %v", code, err))
+			continue
+		}
+		okAny = true
+		compName := resp.Competition.Name
+		country := resp.Competition.Area.Name
+		season := normaliseSeason(resp.Filters.Season)
+		for _, m := range resp.Matches {
+			fx, err := mapMatch(m, code, compName, country, season)
+			if err != nil {
+				errMsgs = append(errMsgs, fmt.Sprintf("%s match %d: %v", code, m.ID, err))
+				continue
+			}
+			out = append(out, fx)
+		}
+	}
+	if !okAny && len(errMsgs) > 0 {
+		return nil, fmt.Errorf("all competitions failed: %s", strings.Join(errMsgs, "; "))
+	}
+	return out, nil
+}
+
+// FetchEvents is not supported on the free tier.
+func (*Provider) FetchEvents(_ context.Context, _ []string) ([]ingestion.Event, error) {
+	return nil, nil
+}
+
+// FetchBenchmarkForecasts is not supported on the free tier.
+func (*Provider) FetchBenchmarkForecasts(_ context.Context, _ []string) ([]ingestion.BenchmarkForecast, error) {
+	return nil, nil
+}
+
+// -------- mapping --------
+
+func mapMatch(m APIMatch, compCode, compName, country, season string) (ingestion.Fixture, error) {
+	kickoff, err := time.Parse(time.RFC3339, m.UTCDate)
+	if err != nil {
+		return ingestion.Fixture{}, fmt.Errorf("parse utcDate %q: %w", m.UTCDate, err)
+	}
+	status := mapStatus(m.Status)
+	home, away := 0, 0
+	if m.Score.FullTime.Home != nil {
+		home = *m.Score.FullTime.Home
+	}
+	if m.Score.FullTime.Away != nil {
+		away = *m.Score.FullTime.Away
+	}
+	// If the match is still in play / half-time, prefer the live score
+	// which football-data.org returns under FullTime for in-play matches
+	// as "current" (yes, the field name is misleading; it tracks running
+	// score and is finalised only when status becomes FINISHED).
+	var finalResult *repository.Outcome
+	if status == repository.StatusFinished && m.Score.Winner != nil {
+		fr := mapWinner(*m.Score.Winner)
+		if fr != "" {
+			finalResult = &fr
+		}
+	}
+
+	fx := ingestion.Fixture{
+		ExternalMatchID: strconv.Itoa(m.ID),
+		ExternalCompID:  compCode,
+		CompetitionName: compName,
+		Country:         country,
+		Season:          season,
+		HomeTeamExtID:   strconv.Itoa(m.HomeTeam.ID),
+		HomeTeamName:    m.HomeTeam.Name,
+		AwayTeamExtID:   strconv.Itoa(m.AwayTeam.ID),
+		AwayTeamName:    m.AwayTeam.Name,
+		KickoffAt:       kickoff.UTC(),
+		Status:          status,
+		HomeScore:       home,
+		AwayScore:       away,
+		Minute:          m.Minute,
+		FinalResult:     finalResult,
+		SourceUpdatedAt: parseLastUpdated(m.LastUpdated, kickoff),
+	}
+	return fx, nil
+}
+
+func mapStatus(s string) repository.MatchStatus {
+	switch strings.ToUpper(s) {
+	case "SCHEDULED", "TIMED":
+		return repository.StatusScheduled
+	case "LIVE", "IN_PLAY":
+		return repository.StatusLive
+	case "PAUSED":
+		return repository.StatusHalftime
+	case "FINISHED", "AWARDED":
+		return repository.StatusFinished
+	case "POSTPONED", "SUSPENDED":
+		return repository.StatusPostponed
+	case "CANCELED", "CANCELLED":
+		return repository.StatusCancelled
+	default:
+		return repository.StatusScheduled
+	}
+}
+
+func mapWinner(w string) repository.Outcome {
+	switch strings.ToUpper(w) {
+	case "HOME_TEAM":
+		return repository.OutcomeHome
+	case "AWAY_TEAM":
+		return repository.OutcomeAway
+	case "DRAW":
+		return repository.OutcomeDraw
+	}
+	return ""
+}
+
+func parseLastUpdated(s string, fallback time.Time) time.Time {
+	if s == "" {
+		return fallback.UTC()
+	}
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return fallback.UTC()
+	}
+	return t.UTC()
+}
+
+// normaliseSeason converts a filter like "2026" into "2026/27" so the
+// value we store looks like the rest of the codebase. If the input
+// already contains a slash or is empty, it's returned as-is.
+func normaliseSeason(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" || strings.Contains(s, "/") {
+		return s
+	}
+	year, err := strconv.Atoi(s)
+	if err != nil {
+		return s
+	}
+	next := (year + 1) % 100
+	return fmt.Sprintf("%d/%02d", year, next)
+}

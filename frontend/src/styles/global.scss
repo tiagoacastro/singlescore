@@ -1,0 +1,292 @@
+@use './tokens' as *;
+@use './reset';
+@use './mixins' as *;
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-main {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: $content-max-width;
+  margin: 0 auto;
+  padding: $space-6 $space-5;
+
+  @include at-least($bp-md) {
+    padding: $space-8 $space-6;
+  }
+}
+
+// Navigation ---------------------------------------------------------
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgba($color-bg-base, 0.85);
+  border-bottom: 1px solid $color-border;
+  backdrop-filter: saturate(140%) blur(8px);
+
+  &__inner {
+    max-width: $content-max-width;
+    margin: 0 auto;
+    height: $nav-height;
+    display: flex;
+    align-items: center;
+    gap: $space-6;
+    padding: 0 $space-5;
+  }
+
+  &__brand {
+    display: inline-flex;
+    align-items: baseline;
+    gap: $space-2;
+    font-weight: $fw-bold;
+    font-size: $fs-lg;
+    letter-spacing: -0.02em;
+    color: $color-text-primary;
+
+    span.accent { color: $color-accent; }
+  }
+
+  &__links {
+    display: flex;
+    gap: $space-1;
+    margin-left: $space-4;
+  }
+
+  &__link {
+    padding: $space-2 $space-3;
+    border-radius: $radius-md;
+    color: $color-text-secondary;
+    font-weight: $fw-medium;
+    &:hover { color: $color-text-primary; background: $color-bg-hover; }
+    &.is-active { color: $color-text-primary; background: $color-bg-surface; }
+  }
+
+  &__spacer { flex: 1; }
+
+  &__status {
+    display: flex;
+    align-items: center;
+    gap: $space-3;
+    font-size: $fs-xs;
+    color: $color-text-muted;
+  }
+}
+
+// Reusable chips / provenance tags
+.chip {
+  @include pill($color-bg-hover, $color-text-secondary);
+
+  &--live    { @include pill(rgba($color-success, 0.15), $color-success); }
+  &--demo    { @include pill(rgba($color-accent, 0.15), $color-accent); }
+  &--replay  { @include pill(rgba($color-warning, 0.15), $color-warning); }
+  &--historical { @include pill(rgba($color-text-muted, 0.2), $color-text-secondary); }
+  &--danger  { @include pill(rgba($color-danger, 0.15), $color-danger); }
+}
+
+// Card layouts
+.card {
+  @include card;
+  padding: $space-5;
+  display: flex;
+  flex-direction: column;
+  gap: $space-4;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $space-3;
+
+    h2, h3 {
+      font-size: $fs-lg;
+      color: $color-text-primary;
+    }
+    .card__subtitle {
+      font-size: $fs-xs;
+      color: $color-text-muted;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+  }
+}
+
+.grid {
+  display: grid;
+  gap: $space-5;
+  grid-template-columns: 1fr;
+
+  &--3up {
+    @include at-least($bp-md) { grid-template-columns: repeat(3, 1fr); }
+  }
+  &--2up {
+    @include at-least($bp-md) { grid-template-columns: 2fr 1fr; }
+  }
+}
+
+// Metric tile
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: $space-1;
+  &__label {
+    font-size: $fs-xs;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: $color-text-muted;
+  }
+  &__value {
+    font-size: $fs-2xl;
+    font-weight: $fw-semibold;
+    font-feature-settings: 'tnum';
+    color: $color-text-primary;
+  }
+  &__meta {
+    font-size: $fs-xs;
+    color: $color-text-secondary;
+  }
+}
+
+// Match row
+.match-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: $space-4;
+  padding: $space-3 $space-4;
+  border-radius: $radius-md;
+  background: $color-bg-surface;
+  border: 1px solid $color-border-subtle;
+  transition: background $motion-base $ease-standard, border-color $motion-base $ease-standard;
+
+  &:hover { background: $color-bg-hover; border-color: $color-border; }
+
+  &__team {
+    display: flex;
+    align-items: center;
+    gap: $space-2;
+    min-width: 0;
+    font-weight: $fw-medium;
+    color: $color-text-primary;
+
+    &--away { justify-content: flex-end; text-align: right; }
+    span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  }
+
+  &__score {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 72px;
+    font-feature-settings: 'tnum';
+
+    .score {
+      font-size: $fs-xl;
+      font-weight: $fw-bold;
+    }
+    .status {
+      font-size: $fs-xs;
+      color: $color-text-muted;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+  }
+}
+
+// Prob triplet
+.prob-triplet {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: $space-2;
+  margin-top: $space-3;
+
+  .prob {
+    display: flex;
+    flex-direction: column;
+    gap: $space-1;
+    padding: $space-2 $space-3;
+    background: $color-bg-raised;
+    border-radius: $radius-md;
+    border: 1px solid $color-border-subtle;
+
+    &__label {
+      font-size: $fs-xs;
+      color: $color-text-muted;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    &__value {
+      font-size: $fs-lg;
+      font-weight: $fw-semibold;
+      font-feature-settings: 'tnum';
+    }
+    &--home .prob__value { color: $color-prob-home; }
+    &--draw .prob__value { color: $color-prob-draw; }
+    &--away .prob__value { color: $color-prob-away; }
+  }
+}
+
+// Empty state
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: $space-2;
+  padding: $space-10 $space-6;
+  color: $color-text-muted;
+  text-align: center;
+
+  .empty-state__title {
+    color: $color-text-secondary;
+    font-weight: $fw-semibold;
+  }
+}
+
+// Skeletons
+.skeleton {
+  @include skeleton;
+  height: 1em;
+  width: 100%;
+  &--block { height: 180px; }
+  &--row { height: 48px; }
+}
+
+// Charts
+.chart-wrap {
+  width: 100%;
+  height: 320px;
+}
+
+// Page title
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $space-4;
+  margin-bottom: $space-6;
+
+  h1 {
+    font-size: $fs-3xl;
+    letter-spacing: -0.02em;
+  }
+  .page-header__meta {
+    display: flex;
+    gap: $space-2;
+    align-items: center;
+  }
+}
+
+// Error banner
+.error-banner {
+  @include pill(rgba($color-danger, 0.15), $color-danger);
+  padding: $space-3 $space-4;
+  border: 1px solid rgba($color-danger, 0.3);
+  border-radius: $radius-md;
+  margin-bottom: $space-4;
+  font-size: $fs-sm;
+}
