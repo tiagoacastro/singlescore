@@ -123,6 +123,51 @@
   }
 }
 
+// Score card scoreline.
+.scoreline {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: $space-6;
+
+  &__team { font-size: 18px; }
+  &__team--home { text-align: right; }
+  &__score {
+    font-size: 44px;
+    font-weight: $fw-bold;
+    font-feature-settings: 'tnum';
+  }
+  &__sep { opacity: 0.4; }
+}
+
+// Small utilities.
+.section-gap { margin-top: $space-6; }
+.muted { color: $color-text-muted; }
+.text-ok { color: $color-success; }
+.text-bad { color: $color-danger; }
+
+// Dashboard "Data sources" list.
+.source-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  &__item {
+    display: flex;
+    justify-content: space-between;
+    gap: $space-3;
+    padding: 10px $space-3;
+    border-radius: $radius-md;
+    background: $color-bg-raised;
+
+    > div { display: flex; flex-direction: column; }
+  }
+  &__run { text-align: right; }
+  &__meta { font-size: $fs-xs; color: $color-text-secondary; }
+}
+
 // Plain data tables (benchmarks, evaluation breakdowns).
 .data-table {
   width: 100%;
@@ -198,12 +243,189 @@
   }
 }
 
+// Opportunity map (SVG shot map) + its legend.
+.shot-map {
+  overflow-x: auto;
+  svg { display: block; min-width: 640px; font-feature-settings: 'tnum'; }
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 10px;
+  font-size: 11px;
+  color: $color-text-secondary;
+
+  &__item { display: inline-flex; align-items: center; gap: 6px; }
+  &__dot { display: inline-block; border-radius: 50%; }
+}
+
+// Commentary filter chips. The tint comes in as --chip.
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: $space-3;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: $space-1 10px;
+  border: 1px solid #2a3245;
+  border-radius: $radius-pill;
+  background: transparent;
+  color: $color-text-secondary;
+  font-size: $fs-xs;
+  cursor: pointer;
+  transition: background 120ms, color 120ms, border-color 120ms;
+
+  &:focus-visible { @include focus-ring; }
+
+  &__count {
+    padding: 0 6px;
+    border-radius: 10px;
+    background: #1b2131;
+    color: $color-text-muted;
+    font-size: 10px;
+    font-weight: $fw-semibold;
+    font-feature-settings: 'tnum';
+  }
+
+  &--active {
+    border-color: var(--chip);
+    background: color-mix(in srgb, var(--chip) 13%, transparent);
+    color: var(--chip);
+    font-weight: $fw-semibold;
+
+    .filter-chip__count {
+      background: color-mix(in srgb, var(--chip) 27%, transparent);
+      color: var(--chip);
+    }
+  }
+}
+
+// Minute-by-minute feed rows. The per-kind colour comes in as --kind.
+.feed {
+  display: grid;
+  gap: $space-1;
+  max-height: 520px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.feed-row {
+  display: grid;
+  grid-template-columns: 50px 90px 1fr 44px;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: #121622;
+  border-left: 3px solid var(--kind);
+
+  &__minute {
+    font-size: $fs-xs;
+    color: $color-text-secondary;
+    font-feature-settings: 'tnum';
+  }
+  &__kind {
+    font-size: 11px;
+    font-weight: $fw-semibold;
+    color: var(--kind);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  &__text {
+    font-size: $fs-sm;
+    line-height: 1.4;
+    color: #c4ccd9;
+  }
+  &__side {
+    font-size: 10px;
+    color: $color-text-muted;
+    text-align: right;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  &--significant {
+    background: #171f2e;
+    .feed-row__minute { font-weight: $fw-semibold; }
+    .feed-row__text { color: #eaf0f6; }
+  }
+}
+
 // Vertical rhythm for lists of cards / rows.
 .stack {
   display: grid;
   gap: $space-6;
 
   &--tight { gap: $space-2; }
+  &--compact { gap: $space-3; }
+}
+
+// Home-vs-away stat rows (Match stats panel).
+.stat-row {
+  display: grid;
+  gap: $space-1;
+
+  &__values {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: baseline;
+    gap: $space-2;
+    font-size: $fs-sm;
+    font-feature-settings: 'tnum';
+  }
+  &__home { text-align: right; color: #c4ccd9; }
+  &__away { color: #c4ccd9; }
+  &__label {
+    font-size: 11px;
+    color: $color-text-muted;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  &__bar {
+    display: grid;
+    height: 4px;
+    overflow: hidden;
+    border-radius: 2px;
+    background: #1a2030;
+
+    > div { background: #2a3344; }
+  }
+
+  &--home {
+    .stat-row__home { color: $color-prob-home; font-weight: $fw-semibold; }
+    .stat-row__bar > div:first-child { background: $color-prob-home; }
+  }
+  &--away {
+    .stat-row__away { color: $color-prob-away; font-weight: $fw-semibold; }
+    .stat-row__bar > div:last-child { background: $color-prob-away; }
+  }
+}
+
+.stats-footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: $space-4;
+  padding-top: $space-3;
+  border-top: 1px solid $color-border;
+  font-size: $fs-xs;
+  color: $color-text-secondary;
+
+  strong { color: #c4ccd9; }
+
+  &__source {
+    color: $color-text-muted;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
 }
 
 // Filters above a list (Matches page).
@@ -293,6 +515,8 @@
     font-weight: $fw-semibold;
     font-feature-settings: 'tnum';
     color: $color-text-primary;
+
+    &--sm { font-size: 20px; }
   }
   &__meta {
     font-size: $fs-xs;
@@ -321,6 +545,8 @@
     white-space: nowrap;
   }
 
+  &__probs { grid-column: 1 / -1; }
+
   &__team {
     display: flex;
     align-items: center;
@@ -345,6 +571,9 @@
       font-weight: $fw-bold;
     }
     .status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
       font-size: $fs-xs;
       color: $color-text-muted;
       text-transform: uppercase;
@@ -429,6 +658,12 @@
   h1 {
     font-size: $fs-3xl;
     letter-spacing: -0.02em;
+  }
+  .page-header__eyebrow {
+    font-size: $fs-xs;
+    color: $color-text-muted;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
   }
   .page-header__meta {
     display: flex;

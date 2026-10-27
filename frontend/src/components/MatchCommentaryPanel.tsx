@@ -1,32 +1,28 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import type { Match, MatchCommentary } from '@/graphql/types';
+import { FilterChip } from '@/components/FilterChip';
+import { kindStyle } from '@/lib/events';
 import { formatMinute } from '@/lib/format';
+import { colors } from '@/theme';
 
 type Props = {
-  match: Pick<Match, 'commentary' | 'homeTeam' | 'awayTeam'>;
+  match: Pick<Match, 'commentary'>;
 };
 
 // A commentary line with a match minute. Untimed lines (lineups
 // announced, period start / end) are dropped before display.
 type TimedCommentary = MatchCommentary & { minute: number };
 
-// Grouping used by the filter-chip row. "ALL" is the implicit default.
-// Each group collects one or more kinds from the raw ESPN
-// classification; e.g. "Goals" includes both GOAL and OWN_GOAL,
-// "Chances" includes every ATTEMPT_* kind plus missed / saved penalties
-// so the user can scrub through every chance at a glance.
+// Filter chips; each collects one or more commentary kinds. "Chances"
+// includes every attempt plus missed / saved penalties so the user can
+// scrub through every chance at a glance.
 const FILTER_GROUPS: ReadonlyArray<{
   id: string;
   label: string;
   kinds: ReadonlySet<string>;
   color: string;
 }> = [
-  {
-    id: 'GOALS',
-    label: 'Goals',
-    kinds: new Set(['GOAL', 'OWN_GOAL']),
-    color: '#38d996',
-  },
+  { id: 'GOALS', label: 'Goals', kinds: new Set(['GOAL', 'OWN_GOAL']), color: colors.home },
   {
     id: 'CHANCES',
     label: 'Chances',
@@ -37,109 +33,37 @@ const FILTER_GROUPS: ReadonlyArray<{
       'PENALTY_MISSED',
       'PENALTY_SAVED',
     ]),
-    color: '#7fb5ff',
+    color: colors.info,
   },
-  {
-    id: 'CARDS',
-    label: 'Cards',
-    kinds: new Set(['YELLOW_CARD', 'RED_CARD']),
-    color: '#f2c94c',
-  },
-  { id: 'SUBS', label: 'Subs', kinds: new Set(['SUBSTITUTION']), color: '#c4ccd9' },
+  { id: 'CARDS', label: 'Cards', kinds: new Set(['YELLOW_CARD', 'RED_CARD']), color: colors.card },
+  { id: 'SUBS', label: 'Subs', kinds: new Set(['SUBSTITUTION']), color: colors.textBody },
   {
     id: 'FOULS',
     label: 'Fouls',
     kinds: new Set(['FOUL', 'OFFSIDE', 'FREE_KICK']),
-    color: '#ff9f80',
+    color: colors.foul,
   },
-  { id: 'CORNERS', label: 'Corners', kinds: new Set(['CORNER']), color: '#9b7fff' },
-  { id: 'VAR', label: 'VAR', kinds: new Set(['VAR']), color: '#7fb5ff' },
+  { id: 'CORNERS', label: 'Corners', kinds: new Set(['CORNER']), color: colors.corner },
+  { id: 'VAR', label: 'VAR', kinds: new Set(['VAR']), color: colors.info },
 ];
 
-// Per-kind colour used for the left border + kind pill. Keep these in
-// sync with FILTER_GROUPS so filter chip colour == row colour.
-const KIND_COLOR: Record<string, string> = {
-  GOAL: '#38d996',
-  OWN_GOAL: '#ff7fa3',
-  PENALTY_MISSED: '#ef4a56',
-  PENALTY_SAVED: '#f2c94c',
-  ATTEMPT_SAVED: '#7fb5ff',
-  ATTEMPT_BLOCKED: '#9aa6ba',
-  ATTEMPT_MISSED: '#6c7891',
-  YELLOW_CARD: '#f2c94c',
-  RED_CARD: '#ef4a56',
-  SUBSTITUTION: '#c4ccd9',
-  FOUL: '#ff9f80',
-  OFFSIDE: '#ff9f80',
-  FREE_KICK: '#9aa6ba',
-  CORNER: '#9b7fff',
-  VAR: '#7fb5ff',
-  PERIOD_START: '#6c7891',
-  PERIOD_END: '#6c7891',
-  LINEUP: '#6c7891',
-  COMMENTARY: '#6c7891',
-};
+const SIGNIFICANT_KINDS: ReadonlySet<string> = new Set(['GOAL', 'OWN_GOAL', 'RED_CARD']);
 
-function colorFor(kind: string): string {
-  return KIND_COLOR[kind] ?? '#9aa6ba';
-}
-
-// Short, human-friendly label for the kind pill on each row. Falls
-// back to a title-cased version of the raw kind for anything we
-// haven't explicitly mapped (future-proofing when ESPN adds new
-// phrases).
-const KIND_LABEL: Record<string, string> = {
-  GOAL: 'Goal',
-  OWN_GOAL: 'Own goal',
-  PENALTY_MISSED: 'Pen. miss',
-  PENALTY_SAVED: 'Pen. save',
-  ATTEMPT_SAVED: 'Shot saved',
-  ATTEMPT_BLOCKED: 'Shot blocked',
-  ATTEMPT_MISSED: 'Shot off',
-  YELLOW_CARD: 'Yellow',
-  RED_CARD: 'Red',
-  SUBSTITUTION: 'Sub',
-  FOUL: 'Foul',
-  OFFSIDE: 'Offside',
-  FREE_KICK: 'Free kick',
-  CORNER: 'Corner',
-  VAR: 'VAR',
-  PERIOD_START: 'Period',
-  PERIOD_END: 'Period',
-  LINEUP: 'Lineup',
-  COMMENTARY: 'Note',
-};
-
-function labelFor(kind: string): string {
-  if (KIND_LABEL[kind]) return KIND_LABEL[kind];
-  // Fallback: GOAL_SOMETHING_WEIRD -> "Goal something weird"
-  const spaced = kind.replace(/_/g, ' ').toLowerCase();
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
-}
-
-// Reverse-chronological ordering helps a reader scan the latest
-// action first (same as Flashscore / ESPN gamecast). We sort by
-// (period desc, minute desc, addedMinute desc, sequence desc) so
-// first-half rows always precede nothing from the second half.
+// Newest first, like a gamecast: period, minute, stoppage time, then
+// ESPN's sequence number.
 function sortedDesc<T extends MatchCommentary>(rows: ReadonlyArray<T>): T[] {
-  return [...rows].sort((a, b) => {
-    const pa = a.period ?? 0;
-    const pb = b.period ?? 0;
-    if (pa !== pb) return pb - pa;
-    const ma = a.minute ?? 0;
-    const mb = b.minute ?? 0;
-    if (ma !== mb) return mb - ma;
-    const aa = a.addedMinute ?? 0;
-    const ab = b.addedMinute ?? 0;
-    if (aa !== ab) return ab - aa;
-    return b.sequence - a.sequence;
-  });
+  return [...rows].sort(
+    (a, b) =>
+      (b.period ?? 0) - (a.period ?? 0) ||
+      (b.minute ?? 0) - (a.minute ?? 0) ||
+      (b.addedMinute ?? 0) - (a.addedMinute ?? 0) ||
+      b.sequence - a.sequence,
+  );
 }
 
-// MatchCommentaryPanel renders a filterable, minute-by-minute feed
-// scraped from ESPN. Hidden entirely when no timed commentary rows are
-// present (e.g. matches we haven't backfilled yet) so it never shows
-// as an empty block.
+// MatchCommentaryPanel renders the filterable minute-by-minute feed
+// scraped from ESPN. Hidden when there are no timed lines (e.g. a match
+// that hasn't been scraped yet).
 export function MatchCommentaryPanel({ match }: Props) {
   const rows = useMemo(
     () => (match.commentary ?? []).filter((r): r is TimedCommentary => r.minute != null),
@@ -147,34 +71,23 @@ export function MatchCommentaryPanel({ match }: Props) {
   );
   const [activeFilter, setActiveFilter] = useState<string>('ALL');
 
-  // Per-group counts for the chip badges. Memoised so chip clicks
-  // don't re-walk the array on every re-render.
   const counts = useMemo(() => {
     const c: Record<string, number> = { ALL: rows.length };
-    for (const group of FILTER_GROUPS) c[group.id] = 0;
-    for (const r of rows) {
-      for (const group of FILTER_GROUPS) {
-        if (group.kinds.has(r.kind)) c[group.id] += 1;
-      }
+    for (const group of FILTER_GROUPS) {
+      c[group.id] = rows.filter((r) => group.kinds.has(r.kind)).length;
     }
     return c;
   }, [rows]);
 
   const filtered = useMemo(() => {
-    if (activeFilter === 'ALL') return sortedDesc(rows);
     const group = FILTER_GROUPS.find((g) => g.id === activeFilter);
-    if (!group) return sortedDesc(rows);
-    return sortedDesc(rows.filter((r) => group.kinds.has(r.kind)));
+    return sortedDesc(group ? rows.filter((r) => group.kinds.has(r.kind)) : rows);
   }, [rows, activeFilter]);
 
   if (rows.length === 0) return null;
 
-  // Decide which chips to render. We skip any group whose count is 0
-  // (no CARDS chip in a cardless match) to keep the strip tight.
-  const visibleGroups = FILTER_GROUPS.filter((g) => counts[g.id] > 0);
-
   return (
-    <section className="card" style={{ marginTop: 24 }}>
+    <section className="card">
       <div className="card__header">
         <h2>Minute-by-minute</h2>
         <span className="card__subtitle">
@@ -182,23 +95,16 @@ export function MatchCommentaryPanel({ match }: Props) {
         </span>
       </div>
 
-      {/* Filter chip strip */}
-      <div
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 6,
-          marginBottom: 12,
-        }}
-      >
+      <div className="filter-chips">
         <FilterChip
           label="All"
           count={counts.ALL}
           active={activeFilter === 'ALL'}
-          color="#9aa6ba"
+          color={colors.textSecondary}
           onClick={() => setActiveFilter('ALL')}
         />
-        {visibleGroups.map((g) => (
+        {/* Groups with no rows (no Cards chip in a cardless match) are hidden. */}
+        {FILTER_GROUPS.filter((g) => counts[g.id] > 0).map((g) => (
           <FilterChip
             key={g.id}
             label={g.label}
@@ -210,134 +116,24 @@ export function MatchCommentaryPanel({ match }: Props) {
         ))}
       </div>
 
-      {/* Feed */}
-      <ul
-        style={{
-          listStyle: 'none',
-          margin: 0,
-          padding: 0,
-          display: 'grid',
-          gap: 4,
-          maxHeight: 520,
-          overflowY: 'auto',
-        }}
-      >
+      <ul className="feed">
         {filtered.map((row) => {
-          const color = colorFor(row.kind);
-          const isSignificant =
-            row.kind === 'GOAL' ||
-            row.kind === 'OWN_GOAL' ||
-            row.kind === 'RED_CARD';
+          const style = kindStyle(row.kind);
+          const significant = SIGNIFICANT_KINDS.has(row.kind);
           return (
             <li
               key={row.sequence}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '50px 90px 1fr 44px',
-                gap: 10,
-                alignItems: 'baseline',
-                padding: '7px 10px',
-                borderRadius: 6,
-                background: isSignificant ? '#171f2e' : '#121622',
-                borderLeft: `3px solid ${color}`,
-              }}
+              className={`feed-row${significant ? ' feed-row--significant' : ''}`}
+              style={{ '--kind': style.color } as CSSProperties}
             >
-              <span
-                style={{
-                  color: '#9aa6ba',
-                  fontSize: 12,
-                  fontFeatureSettings: '"tnum"',
-                  fontWeight: isSignificant ? 600 : 400,
-                }}
-              >
-                {formatMinute(row.minute, row.addedMinute)}
-              </span>
-              <span
-                style={{
-                  color,
-                  fontSize: 11,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.06em',
-                  fontWeight: 600,
-                }}
-              >
-                {labelFor(row.kind)}
-              </span>
-              <span
-                style={{
-                  fontSize: 13,
-                  color: isSignificant ? '#eaf0f6' : '#c4ccd9',
-                  lineHeight: 1.4,
-                }}
-              >
-                {row.text}
-              </span>
-              <span
-                style={{
-                  color: '#6c7891',
-                  fontSize: 10,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.08em',
-                  textAlign: 'right',
-                }}
-              >
-                {row.teamSide ?? ''}
-              </span>
+              <span className="feed-row__minute">{formatMinute(row.minute, row.addedMinute)}</span>
+              <span className="feed-row__kind">{style.short}</span>
+              <span className="feed-row__text">{row.text}</span>
+              <span className="feed-row__side">{row.teamSide ?? ''}</span>
             </li>
           );
         })}
       </ul>
     </section>
-  );
-}
-
-function FilterChip({
-  label,
-  count,
-  active,
-  color,
-  onClick,
-}: {
-  label: string;
-  count: number;
-  active: boolean;
-  color: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      style={{
-        border: `1px solid ${active ? color : '#2a3245'}`,
-        background: active ? `${color}22` : 'transparent',
-        color: active ? color : '#9aa6ba',
-        borderRadius: 999,
-        padding: '4px 10px',
-        fontSize: 12,
-        cursor: 'pointer',
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 6,
-        fontWeight: active ? 600 : 400,
-        transition: 'background 120ms, color 120ms, border-color 120ms',
-      }}
-    >
-      <span>{label}</span>
-      <span
-        style={{
-          background: active ? `${color}44` : '#1b2131',
-          borderRadius: 10,
-          padding: '0 6px',
-          fontSize: 10,
-          color: active ? color : '#6c7891',
-          fontFeatureSettings: '"tnum"',
-          fontWeight: 600,
-        }}
-      >
-        {count}
-      </span>
-    </button>
   );
 }

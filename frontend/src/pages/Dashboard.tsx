@@ -3,19 +3,8 @@ import { DASHBOARD_QUERY } from '@/graphql/queries';
 import type { Dashboard } from '@/graphql/types';
 import { EmptyState } from '@/components/EmptyState';
 import { MatchRow } from '@/components/MatchRow';
-import { formatNumber, formatPct } from '@/lib/format';
-
-function fmtRelative(iso: string | null | undefined): string {
-  if (!iso) return 'never';
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const diffSec = Math.round(diffMs / 1000);
-  if (diffSec < 60) return `${diffSec}s ago`;
-  const diffMin = Math.round(diffSec / 60);
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = Math.round(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  return new Date(iso).toLocaleDateString();
-}
+import { SkeletonRows } from '@/components/SkeletonRows';
+import { formatNumber, formatPct, formatRelative } from '@/lib/format';
 
 export function DashboardPage() {
   const { data, loading, error } = useQuery<{ dashboard: Dashboard }>(DASHBOARD_QUERY, {
@@ -76,38 +65,30 @@ export function DashboardPage() {
             <span className="card__subtitle">status</span>
           </div>
           <div className="metric">
-            <span className="metric__value" style={{ fontSize: 20 }}>
+            <span className="metric__value metric__value--sm">
               db:{' '}
-              <strong
-                style={{
-                  color: dash?.systemStatus?.databaseReachable ? '#38d996' : '#ff5a68',
-                }}
-              >
+              <strong className={dash?.systemStatus?.databaseReachable ? 'text-ok' : 'text-bad'}>
                 {dash?.systemStatus?.databaseReachable ? 'reachable' : 'unreachable'}
               </strong>
             </span>
             <span className="metric__meta">
               build v{dash?.systemStatus?.version ?? '—'} · started{' '}
-              {fmtRelative(dash?.systemStatus?.startedAt)}
+              {formatRelative(dash?.systemStatus?.startedAt)}
             </span>
           </div>
         </div>
       </section>
 
-      <section className="grid grid--2up" style={{ marginTop: 24 }} aria-label="Recent matches">
+      <section className="grid grid--2up section-gap" aria-label="Recent matches">
         <div className="card">
           <div className="card__header">
             <h2>Recent finished matches</h2>
             <span className="card__subtitle">pre-match odds</span>
           </div>
           {loading && !dash ? (
-            <>
-              <div className="skeleton skeleton--row" />
-              <div className="skeleton skeleton--row" />
-              <div className="skeleton skeleton--row" />
-            </>
+            <SkeletonRows />
           ) : dash?.recentFinishedMatches.length ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div className="stack stack--tight">
               {dash.recentFinishedMatches.map((m) => (
                 <MatchRow key={m.id} match={m} showProbabilities />
               ))}
@@ -123,28 +104,20 @@ export function DashboardPage() {
             <span className="card__subtitle">last run</span>
           </div>
           {dash?.dataSources?.length ? (
-            <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 10 }}>
+            <ul className="source-list">
               {dash.dataSources.map((ds) => (
-                <li
-                  key={`${ds.provider}-${ds.jobName}`}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    gap: 12,
-                    padding: '10px 12px',
-                    background: '#141924',
-                    borderRadius: 8,
-                  }}
-                >
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <li key={`${ds.provider}-${ds.jobName}`} className="source-list__item">
+                  <div>
                     <strong>{ds.provider}</strong>
-                    <span style={{ fontSize: 12, color: '#9aa6ba' }}>{ds.jobName}</span>
+                    <span className="source-list__meta">{ds.jobName}</span>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div>{ds.lastStatus ?? '—'}</div>
-                    <div style={{ fontSize: 12, color: '#9aa6ba' }}>
-                      {fmtRelative(ds.lastRunAt)} · in {ds.recordsIn} / out {ds.recordsOut}
+                  <div className="source-list__run">
+                    <div className={ds.lastStatus === 'SUCCEEDED' ? undefined : 'text-bad'}>
+                      {ds.lastStatus ?? '—'}
                     </div>
+                    <span className="source-list__meta">
+                      {formatRelative(ds.lastRunAt)} · in {ds.recordsIn} / out {ds.recordsOut}
+                    </span>
                   </div>
                 </li>
               ))}

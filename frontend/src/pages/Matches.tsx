@@ -5,6 +5,7 @@ import { COMPETITIONS_QUERY, MATCH_LIST_QUERY } from '@/graphql/queries';
 import type { Competition, Match } from '@/graphql/types';
 import { EmptyState } from '@/components/EmptyState';
 import { MatchRow } from '@/components/MatchRow';
+import { SkeletonRows } from '@/components/SkeletonRows';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
 
 interface MatchesData {
@@ -111,11 +112,7 @@ export function MatchesPage() {
           </span>
         </div>
         {loading && !matches ? (
-          <>
-            <div className="skeleton skeleton--row" />
-            <div className="skeleton skeleton--row" />
-            <div className="skeleton skeleton--row" />
-          </>
+          <SkeletonRows />
         ) : matches?.edges.length ? (
           <>
             <div className="stack stack--tight">

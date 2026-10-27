@@ -50,7 +50,7 @@ export function Nav() {
         <div className="nav__status" role="status" aria-live="polite">
           <span>
             db:{' '}
-            <strong style={{ color: health?.databaseReachable ? '#38d996' : '#ff5a68' }}>
+            <strong className={health?.databaseReachable ? 'text-ok' : 'text-bad'}>
               {health ? (health.databaseReachable ? 'ok' : 'unreachable') : '…'}
             </strong>
           </span>

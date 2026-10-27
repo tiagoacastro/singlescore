@@ -26,7 +26,7 @@ export function MatchDetailPage() {
     return (
       <section className="card">
         <div className="skeleton skeleton--row" />
-        <div className="skeleton skeleton--block" style={{ marginTop: 16 }} />
+        <div className="skeleton skeleton--block section-gap" />
       </section>
     );
   }
@@ -42,12 +42,12 @@ export function MatchDetailPage() {
     <>
       <header className="page-header">
         <div>
-          <div style={{ fontSize: 12, color: '#6c7891', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          <div className="page-header__eyebrow">
             {m.competition.name}
             {m.competition.country ? ` · ${m.competition.country}` : ''}
           </div>
           <h1>
-            {m.homeTeam.name} <span style={{ color: '#6c7891' }}>vs</span> {m.awayTeam.name}
+            {m.homeTeam.name} <span className="muted">vs</span> {m.awayTeam.name}
           </h1>
         </div>
         <div className="page-header__meta">
@@ -59,10 +59,10 @@ export function MatchDetailPage() {
       {/* Keyed by match so per-panel state (e.g. the commentary filter)
           resets when navigating to another match. */}
       <div className="match-layout" key={m.id}>
-        <div>
+        <div className="stack">
           <MatchScoreCard match={m} />
 
-          <section className="card" style={{ marginTop: 24 }}>
+          <section className="card">
             <ProbabilityTimeline match={m} />
           </section>
 

@@ -31,9 +31,9 @@ export function MatchRow({ match, showProbabilities = false }: MatchRowProps) {
           {match.competition.name} · {KICKOFF_FORMAT.format(new Date(match.kickoffAt))}
         </div>
         <div className="score">
-          {match.homeScore} <span style={{ opacity: 0.4 }}>·</span> {match.awayScore}
+          {match.homeScore} <span className="scoreline__sep">·</span> {match.awayScore}
         </div>
-        <div className="status" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <div className="status">
           <MatchStatusChip status={match.status} />
           {/* Everything is historical now; only flag the exceptions. */}
           {match.provenance !== 'HISTORICAL' ? <ProvenanceChip provenance={match.provenance} /> : null}
@@ -43,7 +43,7 @@ export function MatchRow({ match, showProbabilities = false }: MatchRowProps) {
         <span>{away}</span>
       </div>
       {showProbabilities && prob ? (
-        <div style={{ gridColumn: '1 / -1' }}>
+        <div className="match-row__probs">
           <ProbTriplet pHome={prob.pHome} pDraw={prob.pDraw} pAway={prob.pAway} />
         </div>
       ) : null}

@@ -16,7 +16,7 @@ function timeLabel(iso: string): string {
 export function BenchmarkTable({ match }: Props) {
   const bench = match.benchmarkPredictions ?? [];
   return (
-    <div className="card" style={{ marginTop: 24 }}>
+    <div className="card">
       <div className="card__header">
         <h2>Benchmark comparison</h2>
         <span className="card__subtitle">{bench.length} benchmark forecasts</span>

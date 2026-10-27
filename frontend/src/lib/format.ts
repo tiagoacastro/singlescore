@@ -18,3 +18,15 @@ export function formatMinute(
   if (approximate) return `~${minute}'`;
   return added ? `${minute}'+${added}` : `${minute}'`;
 }
+
+// "45s ago", "12m ago", "3h ago", or the date for anything older.
+export function formatRelative(iso: string | null | undefined): string {
+  if (!iso) return 'never';
+  const sec = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  return new Date(iso).toLocaleDateString();
+}

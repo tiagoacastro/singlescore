@@ -14,6 +14,7 @@ import { MODEL_EVALUATION_QUERY } from '@/graphql/queries';
 import type { EvaluationReport } from '@/graphql/types';
 import { EmptyState } from '@/components/EmptyState';
 import { formatPct } from '@/lib/format';
+import { colors } from '@/theme';
 
 const pct = (x: number) => formatPct(x, 1);
 
@@ -81,7 +82,7 @@ export function EvaluationPage() {
         </div>
       </section>
 
-      <section className="card" style={{ marginTop: 24 }}>
+      <section className="card section-gap">
         <div className="card__header">
           <h2>Calibration</h2>
           <span className="card__subtitle">predicted vs observed frequency</span>
@@ -100,17 +101,17 @@ export function EvaluationPage() {
                 }))}
                 margin={{ top: 10, right: 20, bottom: 20, left: 0 }}
               >
-                <CartesianGrid stroke="#1f2735" strokeDasharray="3 3" />
-                <XAxis dataKey="bin" stroke="#6c7891" />
-                <YAxis stroke="#6c7891" tickFormatter={(v) => `${v}%`} domain={[0, 100]} />
+                <CartesianGrid stroke={colors.border} strokeDasharray="3 3" />
+                <XAxis dataKey="bin" stroke={colors.textMuted} />
+                <YAxis stroke={colors.textMuted} tickFormatter={(v) => `${v}%`} domain={[0, 100]} />
                 <Tooltip
-                  contentStyle={{ background: '#141924', border: '1px solid #1f2735', borderRadius: 8 }}
+                  contentStyle={{ background: colors.bgRaised, border: `1px solid ${colors.border}`, borderRadius: 8 }}
                   formatter={(v: number) => `${v}%`}
                 />
-                <Legend wrapperStyle={{ color: '#9aa6ba' }} />
-                <ReferenceLine y={0} stroke="#1f2735" />
-                <Bar dataKey="predicted" name="Avg predicted" fill="#4c9aff" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="observed" name="Observed" fill="#38d996" radius={[4, 4, 0, 0]} />
+                <Legend wrapperStyle={{ color: colors.textSecondary }} />
+                <ReferenceLine y={0} stroke={colors.border} />
+                <Bar dataKey="predicted" name="Avg predicted" fill={colors.accent} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="observed" name="Observed" fill={colors.home} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -122,7 +123,7 @@ export function EvaluationPage() {
         )}
       </section>
 
-      <section className="grid grid--2up" style={{ marginTop: 24 }}>
+      <section className="grid grid--2up section-gap">
         <div className="card">
           <div className="card__header">
             <h2>By forecast minute</h2>

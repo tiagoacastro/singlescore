@@ -20,19 +20,12 @@ export function MatchScoreCard({ match }: Props) {
           kickoff {new Date(match.kickoffAt).toLocaleString()} · pre-match odds
         </span>
       </div>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr auto 1fr',
-          alignItems: 'center',
-          gap: 24,
-        }}
-      >
-        <div style={{ textAlign: 'right', fontSize: 18 }}>{match.homeTeam.name}</div>
-        <div style={{ fontSize: 44, fontWeight: 700, fontFeatureSettings: '"tnum"' }}>
-          {match.homeScore} <span style={{ opacity: 0.4 }}>·</span> {match.awayScore}
+      <div className="scoreline">
+        <div className="scoreline__team scoreline__team--home">{match.homeTeam.name}</div>
+        <div className="scoreline__score">
+          {match.homeScore} <span className="scoreline__sep">·</span> {match.awayScore}
         </div>
-        <div style={{ fontSize: 18 }}>{match.awayTeam.name}</div>
+        <div className="scoreline__team">{match.awayTeam.name}</div>
       </div>
       {preMatch ? (
         <ProbTriplet pHome={preMatch.pHome} pDraw={preMatch.pDraw} pAway={preMatch.pAway} long />
