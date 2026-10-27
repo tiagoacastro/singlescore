@@ -120,34 +120,42 @@ cd backend && go test ./...
   provider is called without its API token being set.** See
   `docs/data-sources.md` for the free-tier plan.
 
-### Live ingestion (football-data.org, free tier)
+### Historical ingestion (football-data.co.uk, hourly notebook)
 
-The `cmd/ingest` CLI pulls fixtures for the five supported leagues from
-[football-data.org](https://www.football-data.org/documentation/api) and
-upserts them into SingleStore with `provenance = 'LIVE'`. It also writes
-a fresh `elo-baseline v0.1.0` prediction snapshot per scheduled / live
-match and records a `data_ingestion_runs` row.
+The project is **API-free in day-to-day operation**: all live data is
+pulled from a single public CSV at
+[football-data.co.uk](https://www.football-data.co.uk/englandm.php)
+(free for personal / educational use, one HTTPS `GET` per run) by a
+SingleStore notebook that runs on an hourly schedule.
+
+Source of truth: [`notebooks/premier_league_ingest.ipynb`](notebooks/premier_league_ingest.ipynb)
+(see [`notebooks/README.md`](notebooks/README.md) for how to upload and
+schedule it in the SingleStore Portal). The same body ships as
+[`scripts/ingest_pl_season.py`](scripts/ingest_pl_season.py) so you can
+run it locally without a Jupyter kernel:
 
 ```bash
-# 1) register for a free API token at
-#    https://www.football-data.org/client/register
-# 2) export it (never commit this value)
-export FOOTBALL_DATA_API_TOKEN=<your-token>
-
-# 3) sanity-check: fetch fixtures without touching the database
-cd backend && go run ./cmd/ingest -dry-run
-
-# 4) real sync (writes to SingleStore)
-go run ./cmd/ingest
-# scope to a subset:
-go run ./cmd/ingest -competitions=PL,PPL
+uv venv .venv --python 3.12
+uv pip install --python .venv/bin/python pandas requests pymysql
+.venv/bin/python scripts/ingest_pl_season.py
 ```
 
-The adapter is rate-limited locally to 10 requests/minute per token to
-respect the free-tier quota. The token is **never** forwarded to the
-React app or returned over GraphQL; it lives only in the ingest process'
-environment. In production, schedule `cmd/ingest` from a systemd timer or
-Kubernetes CronJob — do not loop it inside the HTTP server.
+What it populates per run (fully idempotent — deterministic SHA-1 UUIDs
++ `INSERT ... ON DUPLICATE KEY UPDATE`):
+
+- One `competitions` row (Premier League 2026/27)
+- 20 `teams` rows with chronologically-updated Elo ratings
+- ~80 `matches` rows
+- ~1 520 `model_predictions` (19-point retrospective timeline per played
+  match, using the `elo-poisson v0.2.0` baseline shared with the Go backend)
+- ~80 `benchmark_predictions` (market-consensus pre-match row per
+  played match, derived from the Avg / Bet365 1X2 odds columns)
+- One `data_ingestion_runs` row (keyed on `provider|yyyy-mm-ddTHH`)
+
+Legacy per-match live-focus refresher (gated on
+`FOOTBALL_DATA_API_TOKEN`): still present in the server for compatibility
+but **off by default**. Leave the env var unset to keep the server
+API-free.
 
 ## Model honesty
 
@@ -178,7 +186,7 @@ Kubernetes CronJob — do not loop it inside the HTTP server.
 | Dashboard + Match detail pages     | complete, rendering real GraphQL data                 |
 | Model evaluation page              | complete, calibration/minute-bucket/competition views |
 | Playwright e2e                     | 3 specs green against the running stack               |
-| football-data.org adapter          | complete; unit tests green; rate-limited to 10 rpm    |
-| Live ingestion CLI (`cmd/ingest`)  | complete; records `data_ingestion_runs` per run       |
-| Scheduled ingestion job            | **pending** — invoke `cmd/ingest` from systemd/CronJob |
+| football-data.co.uk CSV ingest     | complete; `notebooks/premier_league_ingest.ipynb` + `scripts/ingest_pl_season.py`, idempotent, ~4s per run |
+| football-data.org adapter          | kept for compatibility; off by default (no `FOOTBALL_DATA_API_TOKEN`) |
+| Scheduled ingestion job            | complete via SingleStore Portal → Jobs on the notebook (hourly cron) |
 | Figma designs                      | **pending** — using in-repo SCSS tokens for v1        |

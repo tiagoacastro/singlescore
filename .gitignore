@@ -30,3 +30,9 @@ backend/coverage.out
 .terraform/
 dist/
 build/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
