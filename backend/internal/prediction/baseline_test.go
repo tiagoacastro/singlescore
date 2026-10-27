@@ -149,3 +149,40 @@ func TestBaseline_PreMatchDrawShareIsReasonable(t *testing.T) {
 		t.Fatalf("pre-match draw share for even teams out of band: %+v", got)
 	}
 }
+
+// parityGolden pins the baseline to values computed by the Python port
+// (`predict` in scripts/ingest_season.py), which writes every stored
+// prediction. scripts/test_ingest.py checks the same table, so changing
+// either implementation without the other fails a test.
+var parityGolden = []struct {
+	homeElo, awayElo             float64
+	homeScore, awayScore, minute int
+	homeRed, awayRed             int
+	wantHome, wantDraw, wantAway float64
+}{
+	{1500, 1500, 0, 0, 0, 0, 0, 0.3944749963608933, 0.2576905015450894, 0.34783450209401734},
+	{1650, 1480, 0, 0, 0, 0, 0, 0.4632505844903906, 0.25106548104672943, 0.28568393446288},
+	{1500, 1500, 1, 0, 60, 0, 0, 0.7581577910980946, 0.19455434444911848, 0.04728786445278695},
+	{1480, 1620, 1, 1, 75, 1, 0, 0.11474430524945022, 0.7015156766421249, 0.1837400181084249},
+	{1550, 1500, 0, 2, 30, 0, 1, 0.046202034223123356, 0.117014163838894, 0.8367838019379826},
+	{1500, 1500, 2, 1, 90, 0, 0, 1.0, 0.0, 0.0},
+}
+
+func TestBaseline_MatchesPythonPort(t *testing.T) {
+	const tol = 1e-9
+	for i, c := range parityGolden {
+		got, err := NewBaseline().Predict(Snapshot{
+			HomeElo: c.homeElo, AwayElo: c.awayElo,
+			HomeScore: c.homeScore, AwayScore: c.awayScore, Minute: c.minute,
+			HomeRedCards: c.homeRed, AwayRedCards: c.awayRed,
+		})
+		if err != nil {
+			t.Fatalf("case %d: Predict err %v", i, err)
+		}
+		if math.Abs(got.Home-c.wantHome) > tol || math.Abs(got.Draw-c.wantDraw) > tol ||
+			math.Abs(got.Away-c.wantAway) > tol {
+			t.Errorf("case %d: got (%.12f, %.12f, %.12f), Python port gives (%.12f, %.12f, %.12f)",
+				i, got.Home, got.Draw, got.Away, c.wantHome, c.wantDraw, c.wantAway)
+		}
+	}
+}

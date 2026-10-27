@@ -15,8 +15,9 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/tiagocastro/singlescore/backend/internal/graph/model"
 	"github.com/tiagocastro/singlescore/backend/internal/repository"
@@ -44,32 +45,26 @@ func New(cat *repository.Catalog, m *repository.Matches, p *repository.Predictio
 
 // Dashboard assembles the home-screen payload.
 func (s *Service) Dashboard(ctx context.Context) (*model.Dashboard, error) {
-	recentFinished, err := s.matches.RecentFinished(ctx, 10)
-	if err != nil {
-		return nil, fmt.Errorf("recent finished: %w", err)
-	}
-
-	finishedModels, err := s.hydrateMatches(ctx, recentFinished)
+	var dash model.Dashboard // SystemStatus is attached by the resolver.
+	err := parallel(ctx,
+		func(ctx context.Context) error {
+			recent, err := s.matches.RecentFinished(ctx, 10)
+			if err != nil {
+				return err
+			}
+			dash.RecentFinishedMatches, err = s.hydrateMatches(ctx, recent)
+			return err
+		},
+		func(ctx context.Context) (err error) {
+			dash.ModelMetrics, err = s.preMatchModelMetrics(ctx)
+			return err
+		},
+		func(ctx context.Context) (err error) { dash.DataSources, err = s.loadDataSourceStatus(ctx); return err },
+	)
 	if err != nil {
 		return nil, err
 	}
-
-	metrics, err := s.preMatchModelMetrics(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	ds, err := s.loadDataSourceStatus(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return &model.Dashboard{
-		RecentFinishedMatches: finishedModels,
-		ModelMetrics:          metrics,
-		DataSources:           ds,
-		// SystemStatus is attached by the resolver (it needs runtime deps).
-	}, nil
+	return &dash, nil
 }
 
 // loadDataSourceStatus pulls the most-recent ingestion run per job and
@@ -177,36 +172,45 @@ func (s *Service) Match(ctx context.Context, id string) (*model.Match, error) {
 // competition, events, model + benchmark predictions) and builds the
 // gqlgen Match.
 func (s *Service) hydrateMatchDetail(ctx context.Context, raw repository.Match) (*model.Match, error) {
-	teamMap, err := s.catalog.GetTeams(ctx, []string{raw.HomeTeamID, raw.AwayTeamID})
+	ids := []string{raw.ID}
+	var (
+		teams      map[string]repository.Team
+		comps      map[string]repository.Competition
+		events     map[string][]repository.MatchEvent
+		commentary map[string][]repository.MatchCommentary
+		stats      map[string]repository.MatchStats
+		modelPreds map[string][]repository.ModelPrediction
+		benchPreds map[string][]repository.BenchmarkPrediction
+	)
+	err := parallel(ctx,
+		func(ctx context.Context) (err error) {
+			teams, err = s.catalog.GetTeams(ctx, []string{raw.HomeTeamID, raw.AwayTeamID})
+			return err
+		},
+		func(ctx context.Context) (err error) {
+			comps, err = s.catalog.GetCompetitions(ctx, []string{raw.CompetitionID})
+			return err
+		},
+		func(ctx context.Context) (err error) { events, err = s.matches.EventsForMatches(ctx, ids); return err },
+		func(ctx context.Context) (err error) {
+			commentary, err = s.matches.CommentaryForMatches(ctx, ids)
+			return err
+		},
+		func(ctx context.Context) (err error) { stats, err = s.matches.StatsForMatches(ctx, ids); return err },
+		func(ctx context.Context) (err error) {
+			modelPreds, err = s.predictions.ModelForMatches(ctx, ids)
+			return err
+		},
+		func(ctx context.Context) (err error) {
+			benchPreds, err = s.predictions.BenchmarkForMatches(ctx, ids)
+			return err
+		},
+	)
 	if err != nil {
-		return nil, fmt.Errorf("teams: %w", err)
-	}
-	compMap, err := s.catalog.GetCompetitions(ctx, []string{raw.CompetitionID})
-	if err != nil {
-		return nil, fmt.Errorf("competitions: %w", err)
-	}
-	events, err := s.matches.EventsForMatches(ctx, []string{raw.ID})
-	if err != nil {
-		return nil, fmt.Errorf("events: %w", err)
-	}
-	modelPreds, err := s.predictions.ModelForMatches(ctx, []string{raw.ID})
-	if err != nil {
-		return nil, fmt.Errorf("model preds: %w", err)
-	}
-	benchPreds, err := s.predictions.BenchmarkForMatches(ctx, []string{raw.ID})
-	if err != nil {
-		return nil, fmt.Errorf("bench preds: %w", err)
-	}
-	stats, err := s.matches.StatsForMatches(ctx, []string{raw.ID})
-	if err != nil {
-		return nil, fmt.Errorf("stats: %w", err)
-	}
-	commentary, err := s.matches.CommentaryForMatches(ctx, []string{raw.ID})
-	if err != nil {
-		return nil, fmt.Errorf("commentary: %w", err)
+		return nil, err
 	}
 
-	m := toMatchModel(raw, compMap, teamMap)
+	m := toMatchModel(raw, comps, teams)
 	for _, e := range events[raw.ID] {
 		m.Events = append(m.Events, toEventModel(e))
 	}
@@ -219,8 +223,8 @@ func (s *Service) hydrateMatchDetail(ctx context.Context, raw repository.Match) 
 	for _, b := range benchPreds[raw.ID] {
 		m.BenchmarkPredictions = append(m.BenchmarkPredictions, toBenchmarkModel(b))
 	}
-	if s, ok := stats[raw.ID]; ok {
-		m.Stats = toMatchStatsModel(s)
+	if st, ok := stats[raw.ID]; ok {
+		m.Stats = toMatchStatsModel(st)
 	}
 	m.PreMatchPrediction = preMatchPrediction(m.ModelPredictions)
 	return m, nil
@@ -243,7 +247,7 @@ func preMatchPrediction(preds []*model.ModelPrediction) *model.ModelPrediction {
 
 // hydrateMatches turns a slice of raw match rows into gqlgen models,
 // batching team / competition / pre-match-prediction lookups so N raws
-// costs at most 3 round-trips total.
+// cost 3 concurrent round-trips.
 func (s *Service) hydrateMatches(ctx context.Context, raws []repository.Match) ([]*model.Match, error) {
 	if len(raws) == 0 {
 		return []*model.Match{}, nil
@@ -256,17 +260,27 @@ func (s *Service) hydrateMatches(ctx context.Context, raws []repository.Match) (
 		compIDs = append(compIDs, r.CompetitionID)
 		matchIDs = append(matchIDs, r.ID)
 	}
-	teams, err := s.catalog.GetTeams(ctx, dedupStrings(teamIDs))
+	var (
+		teams    map[string]repository.Team
+		comps    map[string]repository.Competition
+		preMatch map[string]repository.ModelPrediction
+	)
+	err := parallel(ctx,
+		func(ctx context.Context) (err error) {
+			teams, err = s.catalog.GetTeams(ctx, dedupStrings(teamIDs))
+			return err
+		},
+		func(ctx context.Context) (err error) {
+			comps, err = s.catalog.GetCompetitions(ctx, dedupStrings(compIDs))
+			return err
+		},
+		func(ctx context.Context) (err error) {
+			preMatch, err = s.predictions.PreMatchModelForMatches(ctx, matchIDs)
+			return err
+		},
+	)
 	if err != nil {
-		return nil, fmt.Errorf("teams: %w", err)
-	}
-	comps, err := s.catalog.GetCompetitions(ctx, dedupStrings(compIDs))
-	if err != nil {
-		return nil, fmt.Errorf("competitions: %w", err)
-	}
-	preMatch, err := s.predictions.PreMatchModelForMatches(ctx, matchIDs)
-	if err != nil {
-		return nil, fmt.Errorf("pre-match preds: %w", err)
+		return nil, err
 	}
 	out := make([]*model.Match, 0, len(raws))
 	for _, r := range raws {
@@ -277,4 +291,15 @@ func (s *Service) hydrateMatches(ctx context.Context, raws []repository.Match) (
 		out = append(out, m)
 	}
 	return out, nil
+}
+
+// parallel runs fns concurrently and returns the first error, cancelling
+// the others' context. Used for independent lookups, each of which is a
+// round-trip to the cluster.
+func parallel(ctx context.Context, fns ...func(context.Context) error) error {
+	g, gctx := errgroup.WithContext(ctx)
+	for _, f := range fns {
+		g.Go(func() error { return f(gctx) })
+	}
+	return g.Wait()
 }

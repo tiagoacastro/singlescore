@@ -23,26 +23,26 @@
 //   - Red cards reduce the carded team's residual lambda, hurting them.
 //
 // This is explicitly NOT a trained model — it's a transparent, testable
-// baseline with sensible calibration at the endpoints. Swap it for a
-// learned model by implementing Predictor.
+// baseline with sensible calibration at the endpoints.
+//
+// The server doesn't call it: stored predictions are written by the
+// Python port in scripts/ingest_season.py. This package is the reference
+// implementation, and TestBaseline_MatchesPythonPort keeps the two in
+// step.
 package prediction
 
-import (
-	"math"
-	"time"
-)
+import "math"
 
 // Snapshot is the subset of match state the baseline predictor needs.
 type Snapshot struct {
-	HomeElo        float64
-	AwayElo        float64
-	HomeScore      int
-	AwayScore      int
-	Minute         int // 0 for pre-match
-	HomeRedCards   int
-	AwayRedCards   int
-	HomeAdvantage  float64 // additive Elo bump for home side; default 60
-	MatchStartedAt time.Time
+	HomeElo       float64
+	AwayElo       float64
+	HomeScore     int
+	AwayScore     int
+	Minute        int // 0 for pre-match
+	HomeRedCards  int
+	AwayRedCards  int
+	HomeAdvantage float64 // additive Elo bump for home side; default 60
 }
 
 // Probabilities carries the three outcome probabilities.
@@ -85,10 +85,11 @@ const (
 	// "neutral" rate before Elo scaling.
 	avgGoalsPerTeamFullMatch = 1.35
 
-	// eloHalfLifeForGoalRatio controls how much Elo advantage inflates
-	// the Poisson λ ratio. An Elo gap equal to this constant halves (or
-	// doubles) the ratio — e.g. +400 Elo → leader scores ~sqrt(2)x
-	// more. Calibrated empirically; a smaller value overweights Elo.
+	// eloHalfLifeForGoalRatio scales how much the Elo gap skews the two
+	// teams' scoring rates: their ratio is exp(gap / this), so an
+	// 800-point gap makes the stronger side score e ≈ 2.7x as often and
+	// +400 about 1.65x. A smaller value overweights Elo. (The name is
+	// historical; the Python port calls it ELO_HALF_LIFE.)
 	eloHalfLifeForGoalRatio = 800.0
 
 	// redCardLambdaFactor is the multiplier applied to the carded

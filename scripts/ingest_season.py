@@ -56,12 +56,14 @@ CSV_BASE_URL = environ.get(
 PROVIDER = "football-data-couk"
 JOB_NAME = "notebook-season"
 
-# These MUST stay in sync with backend/internal/prediction/baseline.go.
+# These MUST stay in sync with backend/internal/prediction/baseline.go;
+# the parity tests on both sides (TestBaseline_MatchesPythonPort and
+# scripts/test_ingest.py) pin the same golden values.
 MODEL_NAME = "elo-poisson"
 MODEL_VERSION = "v0.2.0"
 
 AVG_GOALS_PER_TEAM = 1.35
-ELO_HALF_LIFE = 800.0
+ELO_HALF_LIFE = 800.0  # goal-rate ratio is exp(elo_gap / this)
 RED_CARD_FACTOR = 0.72
 MAX_EXTRA_GOALS = 10
 HOME_ADVANTAGE = 60.0

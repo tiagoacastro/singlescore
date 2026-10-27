@@ -2,16 +2,16 @@
 // match predictions: Brier score, log loss, accuracy, and calibration bins.
 //
 // The three predicted probabilities (home, draw, away) are expected to be
-// in [0, 1] and sum to approximately 1. Callers are expected to normalize
-// before scoring; this package guards against pathological inputs with
-// clamps and returns an error when inputs are invalid.
+// in [0, 1] and sum to approximately 1. Prediction.Validate reports
+// invalid inputs; Compute and Calibration skip them (Compute returns how
+// many it skipped), and the per-prediction metrics clamp probabilities
+// away from 0 so log loss stays finite.
 package evaluation
 
 import (
 	"errors"
 	"fmt"
 	"math"
-	"sort"
 )
 
 // Outcome enumerates the three mutually-exclusive match outcomes.
@@ -56,9 +56,12 @@ var ErrInvalidPrediction = errors.New("evaluation: invalid prediction")
 
 // Validate checks that the three probabilities are in [0, 1] and sum to ~1.
 func (p Prediction) Validate() error {
-	for name, v := range map[string]float64{"p_home": p.PHome, "p_draw": p.PDraw, "p_away": p.PAway} {
-		if math.IsNaN(v) || v < 0 || v > 1 {
-			return fmt.Errorf("%w: %s=%v out of [0,1]", ErrInvalidPrediction, name, v)
+	for _, f := range [...]struct {
+		name string
+		v    float64
+	}{{"p_home", p.PHome}, {"p_draw", p.PDraw}, {"p_away", p.PAway}} {
+		if math.IsNaN(f.v) || f.v < 0 || f.v > 1 {
+			return fmt.Errorf("%w: %s=%v out of [0,1]", ErrInvalidPrediction, f.name, f.v)
 		}
 	}
 	sum := p.PHome + p.PDraw + p.PAway
@@ -159,7 +162,9 @@ func Compute(preds []Prediction) (Summary, int) {
 }
 
 // CalibrationBin reports empirical calibration for predictions whose
-// probability for the actual class falls in the bin [BinLow, BinHigh).
+// top (argmax) probability falls in [BinLow, BinHigh): AvgPredicted is
+// the mean of that probability, ObservedFrequency how often the argmax
+// outcome actually happened.
 type CalibrationBin struct {
 	BinLow            float64
 	BinHigh           float64
@@ -226,8 +231,6 @@ func Calibration(preds []Prediction, nBins int) []CalibrationBin {
 			bins[i].SampleSize = a[i].n
 		}
 	}
-	// Sorted by bin low ascending (already true, but be defensive).
-	sort.Slice(bins, func(i, j int) bool { return bins[i].BinLow < bins[j].BinLow })
 	return bins
 }
 

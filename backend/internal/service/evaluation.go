@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"sort"
 	"time"
 
@@ -27,17 +26,27 @@ func (s *Service) ModelEvaluation(ctx context.Context, modelName, modelVersion *
 	if len(finished.ids) == 0 {
 		return emptyReport(), nil
 	}
-	modelPreds, err := s.predictions.ModelForMatches(ctx, finished.ids)
+	var (
+		modelPreds map[string][]repository.ModelPrediction
+		benchPreds map[string][]repository.BenchmarkPrediction
+		comps      map[string]repository.Competition
+	)
+	err = parallel(ctx,
+		func(ctx context.Context) (err error) {
+			modelPreds, err = s.predictions.ModelForMatches(ctx, finished.ids)
+			return err
+		},
+		func(ctx context.Context) (err error) {
+			benchPreds, err = s.predictions.BenchmarkForMatches(ctx, finished.ids)
+			return err
+		},
+		func(ctx context.Context) (err error) {
+			comps, err = s.catalog.GetCompetitions(ctx, dedupStrings(finished.competitionIDs()))
+			return err
+		},
+	)
 	if err != nil {
 		return nil, err
-	}
-	benchPreds, err := s.predictions.BenchmarkForMatches(ctx, finished.ids)
-	if err != nil {
-		return nil, err
-	}
-	comps, err := s.catalog.GetCompetitions(ctx, dedupStrings(finished.competitionIDs()))
-	if err != nil {
-		return nil, fmt.Errorf("competitions: %w", err)
 	}
 
 	scored := scoreModelPredictions(modelPreds, finished.outcome, deref(modelName), deref(modelVersion))

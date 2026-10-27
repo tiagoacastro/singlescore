@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 )
 
@@ -16,25 +15,20 @@ type Catalog struct {
 // NewCatalog returns a Catalog bound to the given pool.
 func NewCatalog(pool *sql.DB) *Catalog { return &Catalog{pool: pool} }
 
-// ListCompetitions returns competitions ordered by name.
-func (c *Catalog) ListCompetitions(ctx context.Context) ([]Competition, error) {
-	const q = `
-		SELECT id, provider, external_id, name, country, season, logo_url, created_at, updated_at
-		FROM competitions
-		ORDER BY name ASC
-	`
+const competitionColumns = "id, name, country, season, logo_url"
+
+func (c *Catalog) queryCompetitions(ctx context.Context, q string, args ...any) ([]Competition, error) {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	rows, err := c.pool.QueryContext(ctx, q)
+	rows, err := c.pool.QueryContext(ctx, q, args...)
 	if err != nil {
-		return nil, fmt.Errorf("query competitions: %w", err)
+		return nil, err
 	}
 	defer rows.Close()
-
 	var out []Competition
 	for rows.Next() {
 		var r Competition
-		if err := rows.Scan(&r.ID, &r.Provider, &r.ExternalID, &r.Name, &r.Country, &r.Season, &r.LogoURL, &r.CreatedAt, &r.UpdatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.Name, &r.Country, &r.Season, &r.LogoURL); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -42,66 +36,51 @@ func (c *Catalog) ListCompetitions(ctx context.Context) ([]Competition, error) {
 	return out, rows.Err()
 }
 
-func (c *Catalog) GetTeams(ctx context.Context, ids []string) (map[string]Team, error) {
-	if len(ids) == 0 {
-		return map[string]Team{}, nil
-	}
-	placeholders := strings.Repeat("?,", len(ids))
-	placeholders = placeholders[:len(placeholders)-1]
-	q := fmt.Sprintf(`
-		SELECT id, provider, external_id, name, short_name, country, logo_url, elo_rating, created_at, updated_at
-		FROM teams WHERE id IN (%s)
-	`, placeholders)
-
-	args := make([]any, len(ids))
-	for i, id := range ids {
-		args[i] = id
-	}
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-	rows, err := c.pool.QueryContext(ctx, q, args...)
+// ListCompetitions returns competitions ordered by name.
+func (c *Catalog) ListCompetitions(ctx context.Context) ([]Competition, error) {
+	out, err := c.queryCompetitions(ctx, "SELECT "+competitionColumns+" FROM competitions ORDER BY name")
 	if err != nil {
-		return nil, fmt.Errorf("query teams: %w", err)
+		return nil, fmt.Errorf("list competitions: %w", err)
 	}
-	defer rows.Close()
-
-	out := make(map[string]Team, len(ids))
-	for rows.Next() {
-		var r Team
-		if err := rows.Scan(&r.ID, &r.Provider, &r.ExternalID, &r.Name, &r.ShortName, &r.Country, &r.LogoURL, &r.EloRating, &r.CreatedAt, &r.UpdatedAt); err != nil {
-			return nil, err
-		}
-		out[r.ID] = r
-	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // GetCompetitions returns competitions keyed by id for a given id set.
 func (c *Catalog) GetCompetitions(ctx context.Context, ids []string) (map[string]Competition, error) {
+	out := make(map[string]Competition, len(ids))
 	if len(ids) == 0 {
-		return map[string]Competition{}, nil
+		return out, nil
 	}
-	placeholders := strings.Repeat("?,", len(ids))
-	placeholders = placeholders[:len(placeholders)-1]
-	q := fmt.Sprintf(`
-		SELECT id, provider, external_id, name, country, season, logo_url, created_at, updated_at
-		FROM competitions WHERE id IN (%s)
-	`, placeholders)
-	args := make([]any, len(ids))
-	for i, id := range ids {
-		args[i] = id
+	in, args := inClause(ids)
+	rows, err := c.queryCompetitions(ctx,
+		fmt.Sprintf("SELECT %s FROM competitions WHERE id IN (%s)", competitionColumns, in), args...)
+	if err != nil {
+		return nil, fmt.Errorf("get competitions: %w", err)
 	}
+	for _, r := range rows {
+		out[r.ID] = r
+	}
+	return out, nil
+}
+
+// GetTeams returns teams keyed by id for a given id set.
+func (c *Catalog) GetTeams(ctx context.Context, ids []string) (map[string]Team, error) {
+	out := make(map[string]Team, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	in, args := inClause(ids)
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	rows, err := c.pool.QueryContext(ctx, q, args...)
+	rows, err := c.pool.QueryContext(ctx, fmt.Sprintf(
+		"SELECT id, name, short_name, country, logo_url, elo_rating FROM teams WHERE id IN (%s)", in), args...)
 	if err != nil {
-		return nil, fmt.Errorf("query competitions by id: %w", err)
+		return nil, fmt.Errorf("get teams: %w", err)
 	}
 	defer rows.Close()
-	out := make(map[string]Competition, len(ids))
 	for rows.Next() {
-		var r Competition
-		if err := rows.Scan(&r.ID, &r.Provider, &r.ExternalID, &r.Name, &r.Country, &r.Season, &r.LogoURL, &r.CreatedAt, &r.UpdatedAt); err != nil {
+		var r Team
+		if err := rows.Scan(&r.ID, &r.Name, &r.ShortName, &r.Country, &r.LogoURL, &r.EloRating); err != nil {
 			return nil, err
 		}
 		out[r.ID] = r

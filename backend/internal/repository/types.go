@@ -7,31 +7,23 @@ import (
 	"time"
 )
 
-// Competition mirrors the competitions table row.
+// Competition is the subset of a competitions row the API serves.
 type Competition struct {
-	ID         string
-	Provider   string
-	ExternalID *string
-	Name       string
-	Country    *string
-	Season     *string
-	LogoURL    *string
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	ID      string
+	Name    string
+	Country *string
+	Season  *string
+	LogoURL *string
 }
 
-// Team mirrors the teams table row.
+// Team is the subset of a teams row the API serves.
 type Team struct {
-	ID         string
-	Provider   string
-	ExternalID *string
-	Name       string
-	ShortName  *string
-	Country    *string
-	LogoURL    *string
-	EloRating  float64
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	ID        string
+	Name      string
+	ShortName *string
+	Country   *string
+	LogoURL   *string
+	EloRating float64
 }
 
 // MatchStatus is a matches.status value: SCHEDULED, FINISHED, POSTPONED
