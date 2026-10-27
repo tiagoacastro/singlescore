@@ -84,6 +84,26 @@ export interface Match {
   modelPredictions?: ModelPrediction[];
   benchmarkPredictions?: BenchmarkPrediction[];
   latestModelPrediction?: ModelPrediction | null;
+  stats?: MatchStats | null;
+}
+
+export interface MatchStats {
+  homeShots?: number | null;
+  awayShots?: number | null;
+  homeShotsOnTarget?: number | null;
+  awayShotsOnTarget?: number | null;
+  homeCorners?: number | null;
+  awayCorners?: number | null;
+  homeFouls?: number | null;
+  awayFouls?: number | null;
+  homeYellowCards?: number | null;
+  awayYellowCards?: number | null;
+  homeRedCards?: number | null;
+  awayRedCards?: number | null;
+  homeXg?: number | null;
+  awayXg?: number | null;
+  referee?: string | null;
+  source: string;
 }
 
 export interface Health {

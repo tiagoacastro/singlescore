@@ -274,6 +274,10 @@ func (s *Service) hydrateMatchDetail(ctx context.Context, raw repository.Match) 
 	if err != nil {
 		return nil, fmt.Errorf("bench preds: %w", err)
 	}
+	stats, err := s.matches.StatsForMatches(ctx, []string{raw.ID})
+	if err != nil {
+		return nil, fmt.Errorf("stats: %w", err)
+	}
 
 	m := toMatchModel(raw, compMap, teamMap)
 	for _, e := range events[raw.ID] {
@@ -287,6 +291,9 @@ func (s *Service) hydrateMatchDetail(ctx context.Context, raw repository.Match) 
 	for _, b := range benchPreds[raw.ID] {
 		b := b
 		m.BenchmarkPredictions = append(m.BenchmarkPredictions, toBenchmarkModel(b))
+	}
+	if s, ok := stats[raw.ID]; ok {
+		m.Stats = toMatchStatsModel(s)
 	}
 	if n := len(m.ModelPredictions); n > 0 {
 		m.LatestModelPrediction = m.ModelPredictions[n-1]

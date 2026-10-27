@@ -428,6 +428,60 @@ func (m *Matches) EventsForMatches(ctx context.Context, matchIDs []string) (map[
 	return out, rows.Err()
 }
 
+// StatsForMatches returns match_stats rows keyed by match id. Missing
+// match ids are simply absent from the result map (0:1 relationship —
+// not every match has stats).
+func (m *Matches) StatsForMatches(ctx context.Context, matchIDs []string) (map[string]MatchStats, error) {
+	if len(matchIDs) == 0 {
+		return map[string]MatchStats{}, nil
+	}
+	placeholders := strings.Repeat("?,", len(matchIDs))
+	placeholders = placeholders[:len(placeholders)-1]
+	q := fmt.Sprintf(`
+		SELECT match_id,
+		       home_shots, away_shots,
+		       home_shots_on_t, away_shots_on_t,
+		       home_corners, away_corners,
+		       home_fouls, away_fouls,
+		       home_yellow, away_yellow,
+		       home_red, away_red,
+		       home_xg, away_xg,
+		       referee, source, updated_at
+		FROM match_stats
+		WHERE match_id IN (%s)
+	`, placeholders)
+	args := make([]any, len(matchIDs))
+	for i, id := range matchIDs {
+		args[i] = id
+	}
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	rows, err := m.pool.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make(map[string]MatchStats, len(matchIDs))
+	for rows.Next() {
+		var s MatchStats
+		if err := rows.Scan(
+			&s.MatchID,
+			&s.HomeShots, &s.AwayShots,
+			&s.HomeShotsOnT, &s.AwayShotsOnT,
+			&s.HomeCorners, &s.AwayCorners,
+			&s.HomeFouls, &s.AwayFouls,
+			&s.HomeYellow, &s.AwayYellow,
+			&s.HomeRed, &s.AwayRed,
+			&s.HomeXG, &s.AwayXG,
+			&s.Referee, &s.Source, &s.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		out[s.MatchID] = s
+	}
+	return out, rows.Err()
+}
+
 // --- cursor helpers --------------------------------------------------
 
 func encodeCursor(t time.Time, id string) string {

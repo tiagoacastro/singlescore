@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { MatchStatusChip, ProvenanceChip } from '@/components/Chip';
 import { MatchScoreCard } from '@/components/MatchScoreCard';
 import { MatchEventList } from '@/components/MatchEventList';
+import { MatchStatsPanel } from '@/components/MatchStatsPanel';
 import { ProbabilityTimeline } from '@/components/ProbabilityTimeline';
 import { BenchmarkTable } from '@/components/BenchmarkTable';
 
@@ -88,6 +89,8 @@ export function MatchDetailPage() {
       <section className="card" style={{ marginTop: 24 }}>
         <ProbabilityTimeline match={m} />
       </section>
+
+      <MatchStatsPanel match={m} />
 
       <BenchmarkTable match={m} />
     </>

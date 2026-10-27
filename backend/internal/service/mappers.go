@@ -87,6 +87,27 @@ func toModelPredictionModel(p repository.ModelPrediction) *model.ModelPrediction
 	}
 }
 
+func toMatchStatsModel(s repository.MatchStats) *model.MatchStats {
+	return &model.MatchStats{
+		HomeShots:         s.HomeShots,
+		AwayShots:         s.AwayShots,
+		HomeShotsOnTarget: s.HomeShotsOnT,
+		AwayShotsOnTarget: s.AwayShotsOnT,
+		HomeCorners:       s.HomeCorners,
+		AwayCorners:       s.AwayCorners,
+		HomeFouls:         s.HomeFouls,
+		AwayFouls:         s.AwayFouls,
+		HomeYellowCards:   s.HomeYellow,
+		AwayYellowCards:   s.AwayYellow,
+		HomeRedCards:      s.HomeRed,
+		AwayRedCards:      s.AwayRed,
+		HomeXg:            s.HomeXG,
+		AwayXg:            s.AwayXG,
+		Referee:           s.Referee,
+		Source:            s.Source,
+	}
+}
+
 func toBenchmarkModel(b repository.BenchmarkPrediction) *model.BenchmarkPrediction {
 	return &model.BenchmarkPrediction{
 		ID:          b.ID,

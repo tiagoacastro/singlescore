@@ -79,6 +79,25 @@ type BenchmarkPrediction {
   provenance: Provenance!
 }
 
+type MatchStats {
+  homeShots: Int
+  awayShots: Int
+  homeShotsOnTarget: Int
+  awayShotsOnTarget: Int
+  homeCorners: Int
+  awayCorners: Int
+  homeFouls: Int
+  awayFouls: Int
+  homeYellowCards: Int
+  awayYellowCards: Int
+  homeRedCards: Int
+  awayRedCards: Int
+  homeXg: Float
+  awayXg: Float
+  referee: String
+  source: String!
+}
+
 type Match {
   id: ID!
   competition: Competition!
@@ -93,6 +112,7 @@ type Match {
   provenance: Provenance!
   venue: String
   events: [MatchEvent!]!
+  stats: MatchStats
   modelPredictions: [ModelPrediction!]!
   benchmarkPredictions: [BenchmarkPrediction!]!
   latestModelPrediction: ModelPrediction

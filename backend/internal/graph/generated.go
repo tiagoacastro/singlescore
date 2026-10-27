@@ -143,6 +143,7 @@ type ComplexityRoot struct {
 		Minute                func(childComplexity int) int
 		ModelPredictions      func(childComplexity int) int
 		Provenance            func(childComplexity int) int
+		Stats                 func(childComplexity int) int
 		Status                func(childComplexity int) int
 		Venue                 func(childComplexity int) int
 	}
@@ -166,6 +167,25 @@ type ComplexityRoot struct {
 		ID          func(childComplexity int) int
 		Minute      func(childComplexity int) int
 		TeamSide    func(childComplexity int) int
+	}
+
+	MatchStats struct {
+		AwayCorners       func(childComplexity int) int
+		AwayFouls         func(childComplexity int) int
+		AwayRedCards      func(childComplexity int) int
+		AwayShots         func(childComplexity int) int
+		AwayShotsOnTarget func(childComplexity int) int
+		AwayXg            func(childComplexity int) int
+		AwayYellowCards   func(childComplexity int) int
+		HomeCorners       func(childComplexity int) int
+		HomeFouls         func(childComplexity int) int
+		HomeRedCards      func(childComplexity int) int
+		HomeShots         func(childComplexity int) int
+		HomeShotsOnTarget func(childComplexity int) int
+		HomeXg            func(childComplexity int) int
+		HomeYellowCards   func(childComplexity int) int
+		Referee           func(childComplexity int) int
+		Source            func(childComplexity int) int
 	}
 
 	MinuteBucketMetric struct {
@@ -718,6 +738,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Match.Provenance(childComplexity), true
+	case "Match.stats":
+		if e.ComplexityRoot.Match.Stats == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Match.Stats(childComplexity), true
 	case "Match.status":
 		if e.ComplexityRoot.Match.Status == nil {
 			break
@@ -805,6 +831,103 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MatchEvent.TeamSide(childComplexity), true
+
+	case "MatchStats.awayCorners":
+		if e.ComplexityRoot.MatchStats.AwayCorners == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MatchStats.AwayCorners(childComplexity), true
+	case "MatchStats.awayFouls":
+		if e.ComplexityRoot.MatchStats.AwayFouls == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MatchStats.AwayFouls(childComplexity), true
+	case "MatchStats.awayRedCards":
+		if e.ComplexityRoot.MatchStats.AwayRedCards == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MatchStats.AwayRedCards(childComplexity), true
+	case "MatchStats.awayShots":
+		if e.ComplexityRoot.MatchStats.AwayShots == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MatchStats.AwayShots(childComplexity), true
+	case "MatchStats.awayShotsOnTarget":
+		if e.ComplexityRoot.MatchStats.AwayShotsOnTarget == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MatchStats.AwayShotsOnTarget(childComplexity), true
+	case "MatchStats.awayXg":
+		if e.ComplexityRoot.MatchStats.AwayXg == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MatchStats.AwayXg(childComplexity), true
+	case "MatchStats.awayYellowCards":
+		if e.ComplexityRoot.MatchStats.AwayYellowCards == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MatchStats.AwayYellowCards(childComplexity), true
+	case "MatchStats.homeCorners":
+		if e.ComplexityRoot.MatchStats.HomeCorners == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MatchStats.HomeCorners(childComplexity), true
+	case "MatchStats.homeFouls":
+		if e.ComplexityRoot.MatchStats.HomeFouls == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MatchStats.HomeFouls(childComplexity), true
+	case "MatchStats.homeRedCards":
+		if e.ComplexityRoot.MatchStats.HomeRedCards == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MatchStats.HomeRedCards(childComplexity), true
+	case "MatchStats.homeShots":
+		if e.ComplexityRoot.MatchStats.HomeShots == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MatchStats.HomeShots(childComplexity), true
+	case "MatchStats.homeShotsOnTarget":
+		if e.ComplexityRoot.MatchStats.HomeShotsOnTarget == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MatchStats.HomeShotsOnTarget(childComplexity), true
+	case "MatchStats.homeXg":
+		if e.ComplexityRoot.MatchStats.HomeXg == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MatchStats.HomeXg(childComplexity), true
+	case "MatchStats.homeYellowCards":
+		if e.ComplexityRoot.MatchStats.HomeYellowCards == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MatchStats.HomeYellowCards(childComplexity), true
+	case "MatchStats.referee":
+		if e.ComplexityRoot.MatchStats.Referee == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MatchStats.Referee(childComplexity), true
+	case "MatchStats.source":
+		if e.ComplexityRoot.MatchStats.Source == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MatchStats.Source(childComplexity), true
 
 	case "MinuteBucketMetric.brierScore":
 		if e.ComplexityRoot.MinuteBucketMetric.BrierScore == nil {
@@ -1332,6 +1455,8 @@ func (ec *executionContext) childFields_Match(ctx context.Context, field graphql
 		return ec.fieldContext_Match_venue(ctx, field)
 	case "events":
 		return ec.fieldContext_Match_events(ctx, field)
+	case "stats":
+		return ec.fieldContext_Match_stats(ctx, field)
 	case "modelPredictions":
 		return ec.fieldContext_Match_modelPredictions(ctx, field)
 	case "benchmarkPredictions":
@@ -1382,6 +1507,44 @@ func (ec *executionContext) childFields_MatchEvent(ctx context.Context, field gr
 		return ec.fieldContext_MatchEvent_eventTime(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type MatchEvent", field.Name)
+}
+
+func (ec *executionContext) childFields_MatchStats(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "homeShots":
+		return ec.fieldContext_MatchStats_homeShots(ctx, field)
+	case "awayShots":
+		return ec.fieldContext_MatchStats_awayShots(ctx, field)
+	case "homeShotsOnTarget":
+		return ec.fieldContext_MatchStats_homeShotsOnTarget(ctx, field)
+	case "awayShotsOnTarget":
+		return ec.fieldContext_MatchStats_awayShotsOnTarget(ctx, field)
+	case "homeCorners":
+		return ec.fieldContext_MatchStats_homeCorners(ctx, field)
+	case "awayCorners":
+		return ec.fieldContext_MatchStats_awayCorners(ctx, field)
+	case "homeFouls":
+		return ec.fieldContext_MatchStats_homeFouls(ctx, field)
+	case "awayFouls":
+		return ec.fieldContext_MatchStats_awayFouls(ctx, field)
+	case "homeYellowCards":
+		return ec.fieldContext_MatchStats_homeYellowCards(ctx, field)
+	case "awayYellowCards":
+		return ec.fieldContext_MatchStats_awayYellowCards(ctx, field)
+	case "homeRedCards":
+		return ec.fieldContext_MatchStats_homeRedCards(ctx, field)
+	case "awayRedCards":
+		return ec.fieldContext_MatchStats_awayRedCards(ctx, field)
+	case "homeXg":
+		return ec.fieldContext_MatchStats_homeXg(ctx, field)
+	case "awayXg":
+		return ec.fieldContext_MatchStats_awayXg(ctx, field)
+	case "referee":
+		return ec.fieldContext_MatchStats_referee(ctx, field)
+	case "source":
+		return ec.fieldContext_MatchStats_source(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type MatchStats", field.Name)
 }
 
 func (ec *executionContext) childFields_MinuteBucketMetric(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -3609,6 +3772,38 @@ func (ec *executionContext) fieldContext_Match_events(_ context.Context, field g
 	return fc, nil
 }
 
+func (ec *executionContext) _Match_stats(ctx context.Context, field graphql.CollectedField, obj *model.Match) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Match_stats(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Stats, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.MatchStats) graphql.Marshaler {
+			return ec.marshalOMatchStats2ᚖgithubᚗcomᚋtiagocastroᚋsinglescoreᚋbackendᚋinternalᚋgraphᚋmodelᚐMatchStats(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Match_stats(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Match",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_MatchStats(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Match_modelPredictions(ctx context.Context, field graphql.CollectedField, obj *model.Match) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -4006,6 +4201,374 @@ func (ec *executionContext) _MatchEvent_eventTime(ctx context.Context, field gra
 }
 func (ec *executionContext) fieldContext_MatchEvent_eventTime(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("MatchEvent", field, false, false, "Time")
+}
+
+func (ec *executionContext) _MatchStats_homeShots(ctx context.Context, field graphql.CollectedField, obj *model.MatchStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MatchStats_homeShots(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.HomeShots, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_MatchStats_homeShots(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MatchStats", field, false, false, "Int")
+}
+
+func (ec *executionContext) _MatchStats_awayShots(ctx context.Context, field graphql.CollectedField, obj *model.MatchStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MatchStats_awayShots(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AwayShots, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_MatchStats_awayShots(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MatchStats", field, false, false, "Int")
+}
+
+func (ec *executionContext) _MatchStats_homeShotsOnTarget(ctx context.Context, field graphql.CollectedField, obj *model.MatchStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MatchStats_homeShotsOnTarget(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.HomeShotsOnTarget, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_MatchStats_homeShotsOnTarget(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MatchStats", field, false, false, "Int")
+}
+
+func (ec *executionContext) _MatchStats_awayShotsOnTarget(ctx context.Context, field graphql.CollectedField, obj *model.MatchStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MatchStats_awayShotsOnTarget(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AwayShotsOnTarget, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_MatchStats_awayShotsOnTarget(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MatchStats", field, false, false, "Int")
+}
+
+func (ec *executionContext) _MatchStats_homeCorners(ctx context.Context, field graphql.CollectedField, obj *model.MatchStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MatchStats_homeCorners(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.HomeCorners, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_MatchStats_homeCorners(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MatchStats", field, false, false, "Int")
+}
+
+func (ec *executionContext) _MatchStats_awayCorners(ctx context.Context, field graphql.CollectedField, obj *model.MatchStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MatchStats_awayCorners(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AwayCorners, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_MatchStats_awayCorners(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MatchStats", field, false, false, "Int")
+}
+
+func (ec *executionContext) _MatchStats_homeFouls(ctx context.Context, field graphql.CollectedField, obj *model.MatchStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MatchStats_homeFouls(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.HomeFouls, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_MatchStats_homeFouls(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MatchStats", field, false, false, "Int")
+}
+
+func (ec *executionContext) _MatchStats_awayFouls(ctx context.Context, field graphql.CollectedField, obj *model.MatchStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MatchStats_awayFouls(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AwayFouls, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_MatchStats_awayFouls(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MatchStats", field, false, false, "Int")
+}
+
+func (ec *executionContext) _MatchStats_homeYellowCards(ctx context.Context, field graphql.CollectedField, obj *model.MatchStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MatchStats_homeYellowCards(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.HomeYellowCards, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_MatchStats_homeYellowCards(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MatchStats", field, false, false, "Int")
+}
+
+func (ec *executionContext) _MatchStats_awayYellowCards(ctx context.Context, field graphql.CollectedField, obj *model.MatchStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MatchStats_awayYellowCards(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AwayYellowCards, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_MatchStats_awayYellowCards(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MatchStats", field, false, false, "Int")
+}
+
+func (ec *executionContext) _MatchStats_homeRedCards(ctx context.Context, field graphql.CollectedField, obj *model.MatchStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MatchStats_homeRedCards(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.HomeRedCards, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_MatchStats_homeRedCards(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MatchStats", field, false, false, "Int")
+}
+
+func (ec *executionContext) _MatchStats_awayRedCards(ctx context.Context, field graphql.CollectedField, obj *model.MatchStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MatchStats_awayRedCards(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AwayRedCards, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_MatchStats_awayRedCards(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MatchStats", field, false, false, "Int")
+}
+
+func (ec *executionContext) _MatchStats_homeXg(ctx context.Context, field graphql.CollectedField, obj *model.MatchStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MatchStats_homeXg(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.HomeXg, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *float64) graphql.Marshaler {
+			return ec.marshalOFloat2ᚖfloat64(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_MatchStats_homeXg(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MatchStats", field, false, false, "Float")
+}
+
+func (ec *executionContext) _MatchStats_awayXg(ctx context.Context, field graphql.CollectedField, obj *model.MatchStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MatchStats_awayXg(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AwayXg, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *float64) graphql.Marshaler {
+			return ec.marshalOFloat2ᚖfloat64(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_MatchStats_awayXg(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MatchStats", field, false, false, "Float")
+}
+
+func (ec *executionContext) _MatchStats_referee(ctx context.Context, field graphql.CollectedField, obj *model.MatchStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MatchStats_referee(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Referee, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_MatchStats_referee(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MatchStats", field, false, false, "String")
+}
+
+func (ec *executionContext) _MatchStats_source(ctx context.Context, field graphql.CollectedField, obj *model.MatchStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MatchStats_source(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Source, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_MatchStats_source(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MatchStats", field, false, false, "String")
 }
 
 func (ec *executionContext) _MinuteBucketMetric_minuteBucket(ctx context.Context, field graphql.CollectedField, obj *model.MinuteBucketMetric) (ret graphql.Marshaler) {
@@ -6721,6 +7284,11 @@ func (ec *executionContext) _Match(ctx context.Context, sel ast.SelectionSet, ob
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "stats":
+			out.Values[i] = ec._Match_stats(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
 		case "modelPredictions":
 			out.Values[i] = ec._Match_modelPredictions(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -6877,6 +7445,114 @@ func (ec *executionContext) _MatchEvent(ctx context.Context, sel ast.SelectionSe
 			}
 		case "eventTime":
 			out.Values[i] = ec._MatchEvent_eventTime(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var matchStatsImplementors = []string{"MatchStats"}
+
+func (ec *executionContext) _MatchStats(ctx context.Context, sel ast.SelectionSet, obj *model.MatchStats) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, matchStatsImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MatchStats")
+		case "homeShots":
+			out.Values[i] = ec._MatchStats_homeShots(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "awayShots":
+			out.Values[i] = ec._MatchStats_awayShots(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "homeShotsOnTarget":
+			out.Values[i] = ec._MatchStats_homeShotsOnTarget(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "awayShotsOnTarget":
+			out.Values[i] = ec._MatchStats_awayShotsOnTarget(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "homeCorners":
+			out.Values[i] = ec._MatchStats_homeCorners(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "awayCorners":
+			out.Values[i] = ec._MatchStats_awayCorners(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "homeFouls":
+			out.Values[i] = ec._MatchStats_homeFouls(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "awayFouls":
+			out.Values[i] = ec._MatchStats_awayFouls(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "homeYellowCards":
+			out.Values[i] = ec._MatchStats_homeYellowCards(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "awayYellowCards":
+			out.Values[i] = ec._MatchStats_awayYellowCards(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "homeRedCards":
+			out.Values[i] = ec._MatchStats_homeRedCards(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "awayRedCards":
+			out.Values[i] = ec._MatchStats_awayRedCards(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "homeXg":
+			out.Values[i] = ec._MatchStats_homeXg(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "awayXg":
+			out.Values[i] = ec._MatchStats_awayXg(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "referee":
+			out.Values[i] = ec._MatchStats_referee(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "source":
+			out.Values[i] = ec._MatchStats_source(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -8304,6 +8980,13 @@ func (ec *executionContext) marshalOMatch2ᚖgithubᚗcomᚋtiagocastroᚋsingle
 		return graphql.Null
 	}
 	return ec._Match(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOMatchStats2ᚖgithubᚗcomᚋtiagocastroᚋsinglescoreᚋbackendᚋinternalᚋgraphᚋmodelᚐMatchStats(ctx context.Context, sel ast.SelectionSet, v *model.MatchStats) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._MatchStats(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOMatchStatus2ᚖgithubᚗcomᚋtiagocastroᚋsinglescoreᚋbackendᚋinternalᚋgraphᚋmodelᚐMatchStatus(ctx context.Context, v any) (*model.MatchStatus, error) {

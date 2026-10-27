@@ -116,6 +116,7 @@ type Match struct {
 	Provenance            Provenance             `json:"provenance"`
 	Venue                 *string                `json:"venue,omitempty"`
 	Events                []*MatchEvent          `json:"events"`
+	Stats                 *MatchStats            `json:"stats,omitempty"`
 	ModelPredictions      []*ModelPrediction     `json:"modelPredictions"`
 	BenchmarkPredictions  []*BenchmarkPrediction `json:"benchmarkPredictions"`
 	LatestModelPrediction *ModelPrediction       `json:"latestModelPrediction,omitempty"`
@@ -140,6 +141,25 @@ type MatchEvent struct {
 	AddedMinute *int      `json:"addedMinute,omitempty"`
 	Description *string   `json:"description,omitempty"`
 	EventTime   time.Time `json:"eventTime"`
+}
+
+type MatchStats struct {
+	HomeShots         *int     `json:"homeShots,omitempty"`
+	AwayShots         *int     `json:"awayShots,omitempty"`
+	HomeShotsOnTarget *int     `json:"homeShotsOnTarget,omitempty"`
+	AwayShotsOnTarget *int     `json:"awayShotsOnTarget,omitempty"`
+	HomeCorners       *int     `json:"homeCorners,omitempty"`
+	AwayCorners       *int     `json:"awayCorners,omitempty"`
+	HomeFouls         *int     `json:"homeFouls,omitempty"`
+	AwayFouls         *int     `json:"awayFouls,omitempty"`
+	HomeYellowCards   *int     `json:"homeYellowCards,omitempty"`
+	AwayYellowCards   *int     `json:"awayYellowCards,omitempty"`
+	HomeRedCards      *int     `json:"homeRedCards,omitempty"`
+	AwayRedCards      *int     `json:"awayRedCards,omitempty"`
+	HomeXg            *float64 `json:"homeXg,omitempty"`
+	AwayXg            *float64 `json:"awayXg,omitempty"`
+	Referee           *string  `json:"referee,omitempty"`
+	Source            string   `json:"source"`
 }
 
 type MinuteBucketMetric struct {

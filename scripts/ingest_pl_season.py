@@ -274,6 +274,7 @@ class Context:
     match_rows: list[tuple]
     pred_rows: list[tuple]
     bench_rows: list[tuple]
+    stats_rows: list[tuple]
 
 
 def build_rows(df: pd.DataFrame) -> Context:
@@ -296,6 +297,7 @@ def build_rows(df: pd.DataFrame) -> Context:
     match_rows: list[tuple] = []
     pred_rows: list[tuple] = []
     bench_rows: list[tuple] = []
+    stats_rows: list[tuple] = []
 
     for idx, row in df.iterrows():
         home = row["HomeTeam"]
@@ -379,6 +381,9 @@ def build_rows(df: pd.DataFrame) -> Context:
             )
             if bench is not None:
                 bench_rows.append(bench)
+            stats = _make_stats_row(row=row, match_id=match_id)
+            if stats is not None:
+                stats_rows.append(stats)
             # Update Elo for next match's pre-match ratings.
             elo[home], elo[away] = _elo_update(
                 elo[home], elo[away], hs_ft, as_ft
@@ -431,6 +436,7 @@ def build_rows(df: pd.DataFrame) -> Context:
         match_rows=match_rows,
         pred_rows=pred_rows,
         bench_rows=bench_rows,
+        stats_rows=stats_rows,
     )
 
 
@@ -596,6 +602,69 @@ def _make_benchmark_row(
     )
 
 
+def _int_or_none(v) -> int | None:
+    if v is None or pd.isna(v):
+        return None
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _float_or_none(v) -> float | None:
+    if v is None or pd.isna(v):
+        return None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _str_or_none(v) -> str | None:
+    if v is None or pd.isna(v):
+        return None
+    s = str(v).strip()
+    return s or None
+
+
+def _make_stats_row(row: pd.Series, match_id: str) -> tuple | None:
+    """Build a match_stats row from the football-data.co.uk CSV
+    aggregate columns. Returns None if none of the stats columns are
+    populated (e.g. a very old archive season predating these
+    columns)."""
+    stats = {
+        "home_shots": _int_or_none(row.get("HS")),
+        "away_shots": _int_or_none(row.get("AS")),
+        "home_shots_on_t": _int_or_none(row.get("HST")),
+        "away_shots_on_t": _int_or_none(row.get("AST")),
+        "home_corners": _int_or_none(row.get("HC")),
+        "away_corners": _int_or_none(row.get("AC")),
+        "home_fouls": _int_or_none(row.get("HF")),
+        "away_fouls": _int_or_none(row.get("AF")),
+        "home_yellow": _int_or_none(row.get("HY")),
+        "away_yellow": _int_or_none(row.get("AY")),
+        "home_red": _int_or_none(row.get("HR")),
+        "away_red": _int_or_none(row.get("AR")),
+        "home_xg": _float_or_none(row.get("HxG")),
+        "away_xg": _float_or_none(row.get("AxG")),
+        "referee": _str_or_none(row.get("Referee")),
+    }
+    if all(v is None for v in stats.values()):
+        return None
+    return (
+        match_id,
+        stats["home_shots"], stats["away_shots"],
+        stats["home_shots_on_t"], stats["away_shots_on_t"],
+        stats["home_corners"], stats["away_corners"],
+        stats["home_fouls"], stats["away_fouls"],
+        stats["home_yellow"], stats["away_yellow"],
+        stats["home_red"], stats["away_red"],
+        stats["home_xg"], stats["away_xg"],
+        stats["referee"],
+        PROVIDER,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Upsert.
 # ---------------------------------------------------------------------------
@@ -677,6 +746,28 @@ BENCH_UPDATE = [
     "p_home", "p_draw", "p_away", "raw_odds_json", "overround", "provenance",
 ]
 
+STATS_COLS = [
+    "match_id",
+    "home_shots", "away_shots",
+    "home_shots_on_t", "away_shots_on_t",
+    "home_corners", "away_corners",
+    "home_fouls", "away_fouls",
+    "home_yellow", "away_yellow",
+    "home_red", "away_red",
+    "home_xg", "away_xg",
+    "referee", "source",
+]
+STATS_UPDATE = [
+    "home_shots", "away_shots",
+    "home_shots_on_t", "away_shots_on_t",
+    "home_corners", "away_corners",
+    "home_fouls", "away_fouls",
+    "home_yellow", "away_yellow",
+    "home_red", "away_red",
+    "home_xg", "away_xg",
+    "referee", "source",
+]
+
 
 # ---------------------------------------------------------------------------
 # Entry point.
@@ -703,7 +794,8 @@ def main() -> int:
         f"[build] teams={len(ctx.team_rows)} "
         f"matches={len(ctx.match_rows)} "
         f"preds={len(ctx.pred_rows)} "
-        f"benchmarks={len(ctx.bench_rows)}"
+        f"benchmarks={len(ctx.bench_rows)} "
+        f"stats={len(ctx.stats_rows)}"
     )
 
     conn = connect()
@@ -714,6 +806,7 @@ def main() -> int:
             upsert_many(cur, "matches", MATCH_COLS, MATCH_UPDATE, ctx.match_rows)
             upsert_many(cur, "model_predictions", PRED_COLS, PRED_UPDATE, ctx.pred_rows)
             upsert_many(cur, "benchmark_predictions", BENCH_COLS, BENCH_UPDATE, ctx.bench_rows)
+            upsert_many(cur, "match_stats", STATS_COLS, STATS_UPDATE, ctx.stats_rows)
 
             # Bookkeeping.
             run_id = det_id(
@@ -750,7 +843,12 @@ def main() -> int:
                     datetime.fromtimestamp(t0, tz=timezone.utc).replace(tzinfo=None),
                     datetime.now(timezone.utc).replace(tzinfo=None),
                     len(df),
-                    len(ctx.match_rows) + len(ctx.pred_rows) + len(ctx.bench_rows),
+                    (
+                        len(ctx.match_rows)
+                        + len(ctx.pred_rows)
+                        + len(ctx.bench_rows)
+                        + len(ctx.stats_rows)
+                    ),
                     None,
                     details,
                 ),

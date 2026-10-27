@@ -103,6 +103,30 @@ type MatchEvent struct {
 	SourceTimestamp *time.Time
 }
 
+// MatchStats mirrors the match_stats table row. One row per match
+// (1:1 with matches). All counts are nullable because the upstream
+// CSV may omit them for very old archive seasons.
+type MatchStats struct {
+	MatchID       string
+	HomeShots     *int
+	AwayShots     *int
+	HomeShotsOnT  *int
+	AwayShotsOnT  *int
+	HomeCorners   *int
+	AwayCorners   *int
+	HomeFouls     *int
+	AwayFouls     *int
+	HomeYellow    *int
+	AwayYellow    *int
+	HomeRed       *int
+	AwayRed       *int
+	HomeXG        *float64
+	AwayXG        *float64
+	Referee       *string
+	Source        string
+	UpdatedAt     time.Time
+}
+
 // ModelPrediction mirrors the model_predictions table row.
 type ModelPrediction struct {
 	ID               string

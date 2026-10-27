@@ -26,6 +26,7 @@ file per run). CSV includes:
 | `matches`               | ~80 (one row per fixture)         |
 | `model_predictions`     | ~1 520 (19 snapshots per played match) |
 | `benchmark_predictions` | ~80 (one market-consensus row per played match) |
+| `match_stats`           | ~80 (xG, shots, SOT, corners, fouls, cards, referee per played match) |
 | `data_ingestion_runs`   | 1 (keyed on `provider|yyyy-mm-ddTHH`) |
 
 Row counts stay flat on hourly re-runs because every row has a deterministic

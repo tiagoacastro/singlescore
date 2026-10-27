@@ -159,6 +159,24 @@ export const MATCH_DETAIL_QUERY = gql`
         pDraw
         pAway
       }
+      stats {
+        homeShots
+        awayShots
+        homeShotsOnTarget
+        awayShotsOnTarget
+        homeCorners
+        awayCorners
+        homeFouls
+        awayFouls
+        homeYellowCards
+        awayYellowCards
+        homeRedCards
+        awayRedCards
+        homeXg
+        awayXg
+        referee
+        source
+      }
     }
   }
 `;
