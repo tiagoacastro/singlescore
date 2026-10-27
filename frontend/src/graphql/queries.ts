@@ -135,6 +135,15 @@ export const MATCH_DETAIL_QUERY = gql`
         description
         eventTime
       }
+      commentary {
+        sequence
+        minute
+        addedMinute
+        period
+        kind
+        teamSide
+        text
+      }
       modelPredictions {
         id
         modelName

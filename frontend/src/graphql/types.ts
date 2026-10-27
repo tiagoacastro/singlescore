@@ -67,6 +67,16 @@ export interface MatchEvent {
   eventTime: string;
 }
 
+export interface MatchCommentary {
+  sequence: number;
+  minute?: number | null;
+  addedMinute?: number | null;
+  period?: number | null;
+  kind: string;
+  teamSide?: 'HOME' | 'AWAY' | 'NEUTRAL' | null;
+  text: string;
+}
+
 export interface Match {
   id: string;
   competition: Competition;
@@ -81,6 +91,7 @@ export interface Match {
   provenance: Provenance;
   venue?: string | null;
   events?: MatchEvent[];
+  commentary?: MatchCommentary[];
   modelPredictions?: ModelPrediction[];
   benchmarkPredictions?: BenchmarkPrediction[];
   latestModelPrediction?: ModelPrediction | null;

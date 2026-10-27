@@ -127,6 +127,22 @@ type MatchStats struct {
 	UpdatedAt     time.Time
 }
 
+// MatchCommentary mirrors the match_commentary table row. One row per
+// commentary line scraped from the upstream provider (ESPN). The
+// natural key is (match_id, sequence); there is no synthetic id
+// column.
+type MatchCommentary struct {
+	MatchID     string
+	Sequence    int
+	Minute      *int
+	AddedMinute *int
+	Period      *int
+	Kind        string
+	TeamSide    *string
+	Text        string
+	Source      string
+}
+
 // ModelPrediction mirrors the model_predictions table row.
 type ModelPrediction struct {
 	ID               string

@@ -152,6 +152,20 @@ What it populates per run (fully idempotent — deterministic SHA-1 UUIDs
   played match, derived from the Avg / Bet365 1X2 odds columns)
 - One `data_ingestion_runs` row (keyed on `provider|yyyy-mm-ddTHH`)
 
+### Per-event data + minute-by-minute commentary (ESPN, hourly notebook)
+
+The CSV has no per-event timings, so exact goal / card / substitution
+minutes, VAR delays, and the full commentary feed (shots saved, blocked,
+missed, fouls, corners, offsides) are scraped from ESPN's public JSON
+endpoints by
+[`notebooks/premier_league_events_espn.ipynb`](notebooks/premier_league_events_espn.ipynb)
+(generated from [`scripts/ingest_pl_events_espn.py`](scripts/ingest_pl_events_espn.py)).
+This scraping was explicitly authorised by the project owner; it is not
+a licensed feed and is throttled (300 ms between requests, incremental
+re-runs only refetch the last 7 days). It writes `match_events` and
+`match_commentary` (migration `0004`), which feed the match page's event
+timeline, opportunity map, and minute-by-minute panel.
+
 Legacy per-match live-focus refresher (gated on
 `FOOTBALL_DATA_API_TOKEN`): still present in the server for compatibility
 but **off by default**. Leave the env var unset to keep the server
@@ -185,7 +199,8 @@ API-free.
 | Frontend scaffolding               | complete; `npm run typecheck` + `npm run build` clean |
 | Dashboard + Match detail pages     | complete, rendering real GraphQL data                 |
 | Model evaluation page              | complete, calibration/minute-bucket/competition views |
-| Playwright e2e                     | 3 specs green against the running stack               |
+| Playwright e2e                     | 1/3 green; the 2 dashboard specs assume seeded live demo matches, which the historical-only dataset no longer has |
+| ESPN events + commentary scrape    | complete; `notebooks/premier_league_events_espn.ipynb` + `scripts/ingest_pl_events_espn.py`, 80/80 matches matched |
 | football-data.co.uk CSV ingest     | complete; `notebooks/premier_league_ingest.ipynb` + `scripts/ingest_pl_season.py`, idempotent, ~4s per run |
 | football-data.org adapter          | kept for compatibility; off by default (no `FOOTBALL_DATA_API_TOKEN`) |
 | Scheduled ingestion job            | complete via SingleStore Portal → Jobs on the notebook (hourly cron) |

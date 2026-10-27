@@ -8,6 +8,8 @@ import { MatchStatusChip, ProvenanceChip } from '@/components/Chip';
 import { MatchScoreCard } from '@/components/MatchScoreCard';
 import { MatchEventList } from '@/components/MatchEventList';
 import { MatchStatsPanel } from '@/components/MatchStatsPanel';
+import { MatchCommentaryPanel } from '@/components/MatchCommentaryPanel';
+import { OpportunityTimeline } from '@/components/OpportunityTimeline';
 import { ProbabilityTimeline } from '@/components/ProbabilityTimeline';
 import { BenchmarkTable } from '@/components/BenchmarkTable';
 
@@ -90,7 +92,11 @@ export function MatchDetailPage() {
         <ProbabilityTimeline match={m} />
       </section>
 
+      <OpportunityTimeline match={m} />
+
       <MatchStatsPanel match={m} />
+
+      <MatchCommentaryPanel match={m} />
 
       <BenchmarkTable match={m} />
     </>

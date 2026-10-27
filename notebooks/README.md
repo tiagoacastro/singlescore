@@ -64,6 +64,34 @@ Set the `PL_CSV_URL` env var (local) or notebook variable to the desired
 season's E0 CSV. Season codes are two-digit yy-yy, e.g. `2425` for
 2024/25, `2526` for 2025/26, `2627` for 2026/27.
 
+## `premier_league_events_espn.ipynb`
+
+**Source:** ESPN's public JSON endpoints (`site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard?dates=YYYYMMDD`
+and `.../summary?event={id}`). This is scraping of an undocumented
+endpoint, done at the project owner's explicit direction; it is not a
+licensed feed. Requests are throttled to one every 300 ms and hourly
+re-runs only touch matches with no events yet or kicked off in the last
+7 days (~10 requests per run after the first backfill).
+
+Generated from `scripts/ingest_pl_events_espn.py` — edit the script and
+regenerate the notebook rather than editing cells by hand.
+
+**What it writes:**
+
+| Table              | Rows (2026/27 as of this writing) |
+| ------------------ | --------------------------------- |
+| `match_events`     | ~1 510 — goals (incl. `goal---volley`/`header` subtypes), own goals, penalties, cards, subs, VAR/injury delays, with exact minute + stoppage time |
+| `match_commentary` | ~8 880 — every commentary line, classified into `kind` (`ATTEMPT_SAVED`, `ATTEMPT_BLOCKED`, `ATTEMPT_MISSED`, `FOUL`, `CORNER`, `OFFSIDE`, …) and `team_side` |
+
+ESPN team names are mapped onto football-data.co.uk names
+(`TEAM_NAME_MAP`) so rows attach to the matches written by
+`premier_league_ingest.ipynb`; run that one first. Own goals are
+attributed to the team that benefits.
+
+Locally: `.venv/bin/python scripts/ingest_pl_events_espn.py` (~85 s for a
+full-season backfill, ~11 s incremental). Schedule in Portal the same way
+as above, e.g. cron `10 * * * *` so it runs after the CSV ingest.
+
 ### Keeping the model in sync with the Go backend
 
 The Poisson-race constants in cell 4 (`AVG_GOALS_PER_TEAM`,

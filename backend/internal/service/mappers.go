@@ -87,6 +87,18 @@ func toModelPredictionModel(p repository.ModelPrediction) *model.ModelPrediction
 	}
 }
 
+func toMatchCommentaryModel(c repository.MatchCommentary) *model.MatchCommentary {
+	return &model.MatchCommentary{
+		Sequence:    c.Sequence,
+		Minute:      c.Minute,
+		AddedMinute: c.AddedMinute,
+		Period:      c.Period,
+		Kind:        c.Kind,
+		TeamSide:    c.TeamSide,
+		Text:        c.Text,
+	}
+}
+
 func toMatchStatsModel(s repository.MatchStats) *model.MatchStats {
 	return &model.MatchStats{
 		HomeShots:         s.HomeShots,

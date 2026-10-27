@@ -79,6 +79,16 @@ type BenchmarkPrediction {
   provenance: Provenance!
 }
 
+type MatchCommentary {
+  sequence: Int!
+  minute: Int
+  addedMinute: Int
+  period: Int
+  kind: String!
+  teamSide: String
+  text: String!
+}
+
 type MatchStats {
   homeShots: Int
   awayShots: Int
@@ -112,6 +122,7 @@ type Match {
   provenance: Provenance!
   venue: String
   events: [MatchEvent!]!
+  commentary: [MatchCommentary!]!
   stats: MatchStats
   modelPredictions: [ModelPrediction!]!
   benchmarkPredictions: [BenchmarkPrediction!]!

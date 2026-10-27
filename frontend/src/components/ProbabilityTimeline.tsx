@@ -101,10 +101,10 @@ export function ProbabilityTimeline({ match }: Props) {
     const apiEvents = (match.events ?? []).filter(
       (ev): ev is NonNullable<typeof ev> =>
         ev != null &&
-        (ev.eventType === 'GOAL' || ev.eventType === 'RED_CARD') &&
+        (ev.eventType === 'GOAL' || ev.eventType === 'OWN_GOAL' || ev.eventType === 'RED_CARD') &&
         ev.minute != null,
     );
-    const hasApiGoals = apiEvents.some((e) => e.eventType === 'GOAL');
+    const hasApiGoals = apiEvents.some((e) => e.eventType !== 'RED_CARD');
     if (hasApiGoals) {
       return apiEvents.map((ev) => ({
         key: ev.id,
@@ -112,7 +112,7 @@ export function ProbabilityTimeline({ match }: Props) {
         // to 45 or 90 because that's where the probability snapshot
         // was taken too.
         minute: Math.min(90, Math.max(0, ev.minute ?? 0)),
-        kind: ev.eventType as 'GOAL' | 'RED_CARD',
+        kind: ev.eventType === 'RED_CARD' ? 'RED_CARD' : 'GOAL',
         teamSide: (ev.teamSide as 'HOME' | 'AWAY' | null) ?? null,
         description: ev.description ?? '',
         approximate: false,

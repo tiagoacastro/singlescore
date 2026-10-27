@@ -116,10 +116,21 @@ type Match struct {
 	Provenance            Provenance             `json:"provenance"`
 	Venue                 *string                `json:"venue,omitempty"`
 	Events                []*MatchEvent          `json:"events"`
+	Commentary            []*MatchCommentary     `json:"commentary"`
 	Stats                 *MatchStats            `json:"stats,omitempty"`
 	ModelPredictions      []*ModelPrediction     `json:"modelPredictions"`
 	BenchmarkPredictions  []*BenchmarkPrediction `json:"benchmarkPredictions"`
 	LatestModelPrediction *ModelPrediction       `json:"latestModelPrediction,omitempty"`
+}
+
+type MatchCommentary struct {
+	Sequence    int     `json:"sequence"`
+	Minute      *int    `json:"minute,omitempty"`
+	AddedMinute *int    `json:"addedMinute,omitempty"`
+	Period      *int    `json:"period,omitempty"`
+	Kind        string  `json:"kind"`
+	TeamSide    *string `json:"teamSide,omitempty"`
+	Text        string  `json:"text"`
 }
 
 type MatchConnection struct {

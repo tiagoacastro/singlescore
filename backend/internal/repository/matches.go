@@ -482,6 +482,48 @@ func (m *Matches) StatsForMatches(ctx context.Context, matchIDs []string) (map[s
 	return out, rows.Err()
 }
 
+// CommentaryForMatches returns match_commentary rows keyed by match
+// id, ordered by sequence (which already reflects on-pitch chronology
+// in reverse — oldest minute = highest sequence coming out of ESPN).
+// The service layer re-orders to minute-ascending for display.
+func (m *Matches) CommentaryForMatches(ctx context.Context, matchIDs []string) (map[string][]MatchCommentary, error) {
+	if len(matchIDs) == 0 {
+		return map[string][]MatchCommentary{}, nil
+	}
+	placeholders := strings.Repeat("?,", len(matchIDs))
+	placeholders = placeholders[:len(placeholders)-1]
+	q := fmt.Sprintf(`
+		SELECT match_id, sequence, minute, added_minute, period,
+		       kind, team_side, text, source
+		FROM match_commentary
+		WHERE match_id IN (%s)
+		ORDER BY match_id, sequence ASC
+	`, placeholders)
+	args := make([]any, len(matchIDs))
+	for i, id := range matchIDs {
+		args[i] = id
+	}
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	rows, err := m.pool.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make(map[string][]MatchCommentary, len(matchIDs))
+	for rows.Next() {
+		var c MatchCommentary
+		if err := rows.Scan(
+			&c.MatchID, &c.Sequence, &c.Minute, &c.AddedMinute, &c.Period,
+			&c.Kind, &c.TeamSide, &c.Text, &c.Source,
+		); err != nil {
+			return nil, err
+		}
+		out[c.MatchID] = append(out[c.MatchID], c)
+	}
+	return out, rows.Err()
+}
+
 // --- cursor helpers --------------------------------------------------
 
 func encodeCursor(t time.Time, id string) string {

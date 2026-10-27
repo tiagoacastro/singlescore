@@ -278,11 +278,19 @@ func (s *Service) hydrateMatchDetail(ctx context.Context, raw repository.Match) 
 	if err != nil {
 		return nil, fmt.Errorf("stats: %w", err)
 	}
+	commentary, err := s.matches.CommentaryForMatches(ctx, []string{raw.ID})
+	if err != nil {
+		return nil, fmt.Errorf("commentary: %w", err)
+	}
 
 	m := toMatchModel(raw, compMap, teamMap)
 	for _, e := range events[raw.ID] {
 		e := e
 		m.Events = append(m.Events, toEventModel(e))
+	}
+	for _, c := range commentary[raw.ID] {
+		c := c
+		m.Commentary = append(m.Commentary, toMatchCommentaryModel(c))
 	}
 	for _, p := range modelPreds[raw.ID] {
 		p := p

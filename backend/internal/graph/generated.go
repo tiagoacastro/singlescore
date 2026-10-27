@@ -132,6 +132,7 @@ type ComplexityRoot struct {
 		AwayScore             func(childComplexity int) int
 		AwayTeam              func(childComplexity int) int
 		BenchmarkPredictions  func(childComplexity int) int
+		Commentary            func(childComplexity int) int
 		Competition           func(childComplexity int) int
 		Events                func(childComplexity int) int
 		FinalResult           func(childComplexity int) int
@@ -146,6 +147,16 @@ type ComplexityRoot struct {
 		Stats                 func(childComplexity int) int
 		Status                func(childComplexity int) int
 		Venue                 func(childComplexity int) int
+	}
+
+	MatchCommentary struct {
+		AddedMinute func(childComplexity int) int
+		Kind        func(childComplexity int) int
+		Minute      func(childComplexity int) int
+		Period      func(childComplexity int) int
+		Sequence    func(childComplexity int) int
+		TeamSide    func(childComplexity int) int
+		Text        func(childComplexity int) int
 	}
 
 	MatchConnection struct {
@@ -672,6 +683,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Match.BenchmarkPredictions(childComplexity), true
+	case "Match.commentary":
+		if e.ComplexityRoot.Match.Commentary == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Match.Commentary(childComplexity), true
 	case "Match.competition":
 		if e.ComplexityRoot.Match.Competition == nil {
 			break
@@ -756,6 +773,49 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Match.Venue(childComplexity), true
+
+	case "MatchCommentary.addedMinute":
+		if e.ComplexityRoot.MatchCommentary.AddedMinute == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MatchCommentary.AddedMinute(childComplexity), true
+	case "MatchCommentary.kind":
+		if e.ComplexityRoot.MatchCommentary.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MatchCommentary.Kind(childComplexity), true
+	case "MatchCommentary.minute":
+		if e.ComplexityRoot.MatchCommentary.Minute == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MatchCommentary.Minute(childComplexity), true
+	case "MatchCommentary.period":
+		if e.ComplexityRoot.MatchCommentary.Period == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MatchCommentary.Period(childComplexity), true
+	case "MatchCommentary.sequence":
+		if e.ComplexityRoot.MatchCommentary.Sequence == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MatchCommentary.Sequence(childComplexity), true
+	case "MatchCommentary.teamSide":
+		if e.ComplexityRoot.MatchCommentary.TeamSide == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MatchCommentary.TeamSide(childComplexity), true
+	case "MatchCommentary.text":
+		if e.ComplexityRoot.MatchCommentary.Text == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MatchCommentary.Text(childComplexity), true
 
 	case "MatchConnection.edges":
 		if e.ComplexityRoot.MatchConnection.Edges == nil {
@@ -1455,6 +1515,8 @@ func (ec *executionContext) childFields_Match(ctx context.Context, field graphql
 		return ec.fieldContext_Match_venue(ctx, field)
 	case "events":
 		return ec.fieldContext_Match_events(ctx, field)
+	case "commentary":
+		return ec.fieldContext_Match_commentary(ctx, field)
 	case "stats":
 		return ec.fieldContext_Match_stats(ctx, field)
 	case "modelPredictions":
@@ -1465,6 +1527,26 @@ func (ec *executionContext) childFields_Match(ctx context.Context, field graphql
 		return ec.fieldContext_Match_latestModelPrediction(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Match", field.Name)
+}
+
+func (ec *executionContext) childFields_MatchCommentary(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "sequence":
+		return ec.fieldContext_MatchCommentary_sequence(ctx, field)
+	case "minute":
+		return ec.fieldContext_MatchCommentary_minute(ctx, field)
+	case "addedMinute":
+		return ec.fieldContext_MatchCommentary_addedMinute(ctx, field)
+	case "period":
+		return ec.fieldContext_MatchCommentary_period(ctx, field)
+	case "kind":
+		return ec.fieldContext_MatchCommentary_kind(ctx, field)
+	case "teamSide":
+		return ec.fieldContext_MatchCommentary_teamSide(ctx, field)
+	case "text":
+		return ec.fieldContext_MatchCommentary_text(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type MatchCommentary", field.Name)
 }
 
 func (ec *executionContext) childFields_MatchConnection(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -3772,6 +3854,38 @@ func (ec *executionContext) fieldContext_Match_events(_ context.Context, field g
 	return fc, nil
 }
 
+func (ec *executionContext) _Match_commentary(ctx context.Context, field graphql.CollectedField, obj *model.Match) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Match_commentary(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Commentary, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.MatchCommentary) graphql.Marshaler {
+			return ec.marshalNMatchCommentary2ᚕᚖgithubᚗcomᚋtiagocastroᚋsinglescoreᚋbackendᚋinternalᚋgraphᚋmodelᚐMatchCommentaryᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Match_commentary(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Match",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_MatchCommentary(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Match_stats(ctx context.Context, field graphql.CollectedField, obj *model.Match) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -3898,6 +4012,167 @@ func (ec *executionContext) fieldContext_Match_latestModelPrediction(_ context.C
 		},
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _MatchCommentary_sequence(ctx context.Context, field graphql.CollectedField, obj *model.MatchCommentary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MatchCommentary_sequence(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Sequence, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_MatchCommentary_sequence(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MatchCommentary", field, false, false, "Int")
+}
+
+func (ec *executionContext) _MatchCommentary_minute(ctx context.Context, field graphql.CollectedField, obj *model.MatchCommentary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MatchCommentary_minute(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Minute, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_MatchCommentary_minute(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MatchCommentary", field, false, false, "Int")
+}
+
+func (ec *executionContext) _MatchCommentary_addedMinute(ctx context.Context, field graphql.CollectedField, obj *model.MatchCommentary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MatchCommentary_addedMinute(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AddedMinute, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_MatchCommentary_addedMinute(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MatchCommentary", field, false, false, "Int")
+}
+
+func (ec *executionContext) _MatchCommentary_period(ctx context.Context, field graphql.CollectedField, obj *model.MatchCommentary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MatchCommentary_period(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Period, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_MatchCommentary_period(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MatchCommentary", field, false, false, "Int")
+}
+
+func (ec *executionContext) _MatchCommentary_kind(ctx context.Context, field graphql.CollectedField, obj *model.MatchCommentary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MatchCommentary_kind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_MatchCommentary_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MatchCommentary", field, false, false, "String")
+}
+
+func (ec *executionContext) _MatchCommentary_teamSide(ctx context.Context, field graphql.CollectedField, obj *model.MatchCommentary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MatchCommentary_teamSide(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TeamSide, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_MatchCommentary_teamSide(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MatchCommentary", field, false, false, "String")
+}
+
+func (ec *executionContext) _MatchCommentary_text(ctx context.Context, field graphql.CollectedField, obj *model.MatchCommentary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MatchCommentary_text(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Text, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_MatchCommentary_text(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MatchCommentary", field, false, false, "String")
 }
 
 func (ec *executionContext) _MatchConnection_edges(ctx context.Context, field graphql.CollectedField, obj *model.MatchConnection) (ret graphql.Marshaler) {
@@ -7284,6 +7559,11 @@ func (ec *executionContext) _Match(ctx context.Context, sel ast.SelectionSet, ob
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "commentary":
+			out.Values[i] = ec._Match_commentary(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "stats":
 			out.Values[i] = ec._Match_stats(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
@@ -7302,6 +7582,69 @@ func (ec *executionContext) _Match(ctx context.Context, sel ast.SelectionSet, ob
 		case "latestModelPrediction":
 			out.Values[i] = ec._Match_latestModelPrediction(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var matchCommentaryImplementors = []string{"MatchCommentary"}
+
+func (ec *executionContext) _MatchCommentary(ctx context.Context, sel ast.SelectionSet, obj *model.MatchCommentary) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, matchCommentaryImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MatchCommentary")
+		case "sequence":
+			out.Values[i] = ec._MatchCommentary_sequence(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "minute":
+			out.Values[i] = ec._MatchCommentary_minute(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "addedMinute":
+			out.Values[i] = ec._MatchCommentary_addedMinute(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "period":
+			out.Values[i] = ec._MatchCommentary_period(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "kind":
+			out.Values[i] = ec._MatchCommentary_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "teamSide":
+			out.Values[i] = ec._MatchCommentary_teamSide(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "text":
+			out.Values[i] = ec._MatchCommentary_text(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
 		default:
@@ -8567,6 +8910,30 @@ func (ec *executionContext) marshalNMatch2ᚖgithubᚗcomᚋtiagocastroᚋsingle
 		return graphql.Null
 	}
 	return ec._Match(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNMatchCommentary2ᚕᚖgithubᚗcomᚋtiagocastroᚋsinglescoreᚋbackendᚋinternalᚋgraphᚋmodelᚐMatchCommentaryᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.MatchCommentary) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNMatchCommentary2ᚖgithubᚗcomᚋtiagocastroᚋsinglescoreᚋbackendᚋinternalᚋgraphᚋmodelᚐMatchCommentary(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNMatchCommentary2ᚖgithubᚗcomᚋtiagocastroᚋsinglescoreᚋbackendᚋinternalᚋgraphᚋmodelᚐMatchCommentary(ctx context.Context, sel ast.SelectionSet, v *model.MatchCommentary) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "MatchCommentary!")
+		return graphql.Null
+	}
+	return ec._MatchCommentary(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNMatchConnection2ᚖgithubᚗcomᚋtiagocastroᚋsinglescoreᚋbackendᚋinternalᚋgraphᚋmodelᚐMatchConnection(ctx context.Context, sel ast.SelectionSet, v *model.MatchConnection) graphql.Marshaler {
