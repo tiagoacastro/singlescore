@@ -26,7 +26,7 @@ test.describe('Matches', () => {
     await page.goto('/matches');
     await expect(page.locator('.match-row').first()).toBeVisible({ timeout: 15_000 });
 
-    await page.getByLabel('Competition').selectOption({ label: 'La Liga (Spain)' });
+    await page.getByLabel('Competition').selectOption({ label: 'La Liga 2026/27 (Spain)' });
     await expectEveryRow(page, /La Liga ·/);
 
     await page.getByLabel('Team').fill('MADRID');

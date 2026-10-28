@@ -46,7 +46,7 @@ export const DASHBOARD_QUERY = gql`
 
 export const COMPETITIONS_QUERY = gql`
   query Competitions {
-    competitions { id name country }
+    competitions { id name country season }
   }
 `;
 
@@ -183,8 +183,9 @@ export const MODEL_EVALUATION_QUERY = gql`
         sampleSize
       }
       byMinuteBucket { minuteBucket brierScore logLoss sampleSize }
+      byMinute { minute sampleSize accuracy asItStandsAccuracy brierScore }
       byCompetition {
-        competition { id name country }
+        competition { id name country season }
         brierScore
         logLoss
         accuracy

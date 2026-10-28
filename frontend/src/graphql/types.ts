@@ -173,6 +173,13 @@ export interface EvaluationReport {
     marketBrierScore?: number | null;
     marketLogLoss?: number | null;
   }[];
+  byMinute: {
+    minute: number;
+    sampleSize: number;
+    accuracy: number;
+    asItStandsAccuracy: number;
+    brierScore: number;
+  }[];
   benchmarks: {
     provider: string;
     horizon: BenchmarkHorizon;

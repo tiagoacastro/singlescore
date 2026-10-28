@@ -12,6 +12,7 @@ import {
 } from 'recharts';
 import { MODEL_EVALUATION_QUERY } from '@/graphql/queries';
 import type { EvaluationReport } from '@/graphql/types';
+import { AccuracyByMinuteChart } from '@/components/AccuracyByMinuteChart';
 import { EmptyState } from '@/components/EmptyState';
 import { formatPct } from '@/lib/format';
 import { colors } from '@/theme';
@@ -144,6 +145,33 @@ export function EvaluationPage() {
 
       <section className="card section-gap">
         <div className="card__header">
+          <h2>Correct result by minute</h2>
+          <span className="card__subtitle">
+            {report?.byMinute.length
+              ? `${report.byMinute[0].sampleSize} matches with real event minutes`
+              : 'how often the call at each minute was the final result'}
+          </span>
+        </div>
+        {loading && !report ? (
+          <div className="skeleton skeleton--block" />
+        ) : report?.byMinute.length ? (
+          <>
+            <AccuracyByMinuteChart rows={report.byMinute} />
+            <p className="card__note">
+              At each point of the match (pre-match, every 5 minutes, half-time): how often the
+              model&apos;s most likely outcome was the final result, with its 95% range given the
+              sample size. The dashed line is how often the score at that point was already the
+              final result. Only matches whose timeline uses real goal and red-card minutes count,
+              so every point covers the same matches.
+            </p>
+          </>
+        ) : (
+          <EmptyState title="No event-driven timelines yet" />
+        )}
+      </section>
+
+      <section className="card section-gap">
+        <div className="card__header">
           <h2>Calibration</h2>
           <span className="card__subtitle">when the model says X%, how often it happens</span>
         </div>
@@ -229,7 +257,7 @@ export function EvaluationPage() {
                   <tr key={c.competition.id}>
                     <td>
                       <strong>{c.competition.name}</strong>{' '}
-                      {c.competition.country ? <span className="muted">{c.competition.country}</span> : null}
+                      <span className="muted">{c.competition.season}</span>
                     </td>
                     <td>{c.sampleSize}</td>
                     <td>{num(c.brierScore)}</td>

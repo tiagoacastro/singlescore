@@ -80,6 +80,7 @@ type EvaluationReport struct {
 	Summary                  *EvaluationSummary            `json:"summary,omitempty"`
 	Calibration              []*CalibrationBin             `json:"calibration"`
 	ByMinuteBucket           []*MinuteBucketMetric         `json:"byMinuteBucket"`
+	ByMinute                 []*MinuteAccuracy             `json:"byMinute"`
 	ByCompetition            []*CompetitionMetric          `json:"byCompetition"`
 	Benchmarks               []*BenchmarkEvaluationSummary `json:"benchmarks"`
 	MissingBenchmarkCoverage float64                       `json:"missingBenchmarkCoverage"`
@@ -173,6 +174,19 @@ type MatchStats struct {
 	AwayXg            *float64 `json:"awayXg,omitempty"`
 	Referee           *string  `json:"referee,omitempty"`
 	Source            string   `json:"source"`
+}
+
+// How often the result was called right at one point of the match, over
+// every finished match whose timeline comes from real event minutes.
+type MinuteAccuracy struct {
+	// 0 = pre-match, then the 5-minute grid; 45 is half-time.
+	Minute     int `json:"minute"`
+	SampleSize int `json:"sampleSize"`
+	// Share of matches where the model's most likely outcome was the final result.
+	Accuracy float64 `json:"accuracy"`
+	// Share where the score at that minute was already the final result.
+	AsItStandsAccuracy float64 `json:"asItStandsAccuracy"`
+	BrierScore         float64 `json:"brierScore"`
 }
 
 type MinuteBucketMetric struct {

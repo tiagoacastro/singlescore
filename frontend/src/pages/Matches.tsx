@@ -74,7 +74,7 @@ export function MatchesPage() {
             <option value="">All competitions</option>
             {compData?.competitions.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.name}
+                {c.name} {c.season}
                 {c.country ? ` (${c.country})` : ''}
               </option>
             ))}

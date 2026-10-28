@@ -66,7 +66,7 @@ test.describe('Evaluation', () => {
 
     // Per-league table compares the model with the market.
     const byLeague = page.locator('section.card', { has: page.getByRole('heading', { name: 'By league' }) });
-    await expect(byLeague.locator('tbody tr')).toHaveCount(5, { timeout: 15_000 });
+    await expect(byLeague.locator('tbody tr')).toHaveCount(10, { timeout: 15_000 });
 
     // The by-minute table lists the pre-match bucket.
     await expect(page.getByRole('cell', { name: 'Pre-match', exact: true })).toBeVisible({ timeout: 15_000 });

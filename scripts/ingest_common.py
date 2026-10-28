@@ -23,8 +23,14 @@ import pymysql
 # Season + league scope.
 # ---------------------------------------------------------------------------
 
-SEASON = "2026/27"
-SEASON_CODE = "2627"  # football-data.co.uk path segment, yyYY
+@dataclass(frozen=True)
+class Season:
+    name: str  # e.g. "2026/27"
+    code: str  # football-data.co.uk path segment, e.g. "2627"
+
+
+# Seasons loaded into the database, oldest first; the last is current.
+SEASONS: tuple[Season, ...] = (Season("2025/26", "2526"), Season("2026/27", "2627"))
 
 
 @dataclass(frozen=True)
@@ -34,10 +40,9 @@ class League:
     country: str
     espn_slug: str  # ESPN league slug, e.g. "eng.1"
 
-    @property
-    def competition_external_id(self) -> str:
+    def competition_external_id(self, season: Season) -> str:
         """`competitions.external_id`, e.g. "E0-2026-27"."""
-        return f"{self.code}-{SEASON.replace('/', '-')}"
+        return f"{self.code}-{season.name.replace('/', '-')}"
 
 
 LEAGUES: tuple[League, ...] = (

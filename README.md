@@ -119,9 +119,9 @@ cd backend && go test ./...
 
 The app is **historical-only**: the backend is a read-only GraphQL API
 and never calls a football data provider. Two hourly SingleStore
-notebooks load the current season of the Premier League, La Liga,
-Serie A, Bundesliga and Primeira Liga (403 matches as of this writing)
-and tag every row `provenance = 'HISTORICAL'`:
+notebooks load the 2025/26 and 2026/27 seasons of the Premier League,
+La Liga, Serie A, Bundesliga and Primeira Liga (2,155 matches as of this
+writing) and tag every row `provenance = 'HISTORICAL'`:
 
 - [`notebooks/season_ingest.ipynb`](notebooks/season_ingest.ipynb):
   football-data.co.uk CSVs (results, stats, pre-match odds), Elo per
@@ -157,9 +157,10 @@ substring), with filters kept in the URL.
   are seeded from the previous two seasons and updated on a 50/50 blend
   of goals and shot quality (shots on target ≈ 0.3 goals).
 - `scripts/backtest_model.py` replays every match and scores each change
-  separately on both halves of the season. Against v0.2.0, v0.4.0 cuts the
-  pre-match Brier score from 0.640 to 0.609 and the all-snapshot Brier
-  from 0.485 to 0.468. Tried and rejected because they didn't improve
+  separately on the earlier and later half of the matches. Over both stored
+  seasons (2,155 matches) v0.4.0 cuts the pre-match Brier score from 0.633
+  (v0.2.0) to 0.610 and the all-snapshot Brier from 0.493 to 0.478, and
+  every step improves both halves. Tried and rejected because they didn't improve
   held-out matches: an in-match xG update of the scoring rates (built from
   the commentary's shot locations), stronger momentum tilts, and
   game-state effects.
@@ -168,8 +169,8 @@ substring), with filters kept in the URL.
   away_score_at_fc, model_version, provenance)` so evaluation is
   leakage-free.
 - Benchmarks are the bookmakers' pre-match 1X2 odds (market average)
-  from the CSV, de-vigged. Over the 2026/27 season so far they still beat
-  the model (Brier 0.569 vs 0.609 pre-match). The odds are never used as a
+  from the CSV, de-vigged. They still beat the model (pre-match Brier
+  0.574 vs 0.610 over both seasons). The odds are never used as a
   model input, so the comparison stays meaningful.
 
 ## Verified vs. pending

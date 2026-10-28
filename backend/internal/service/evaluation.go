@@ -19,6 +19,24 @@ import (
 // the minute buckets cover the in-play snapshots. modelName and
 // modelVersion optionally restrict which predictions are scored.
 func (s *Service) ModelEvaluation(ctx context.Context, modelName, modelVersion *string) (*model.EvaluationReport, error) {
+	key := deref(modelName) + "|" + deref(modelVersion)
+	s.evalMu.Lock()
+	cached, ok := s.evalCache[key]
+	s.evalMu.Unlock()
+	if ok && time.Since(cached.at) < evaluationCacheTTL {
+		return cached.report, nil
+	}
+	report, err := s.computeEvaluation(ctx, modelName, modelVersion)
+	if err != nil {
+		return nil, err
+	}
+	s.evalMu.Lock()
+	s.evalCache[key] = cachedReport{report: report, at: time.Now()}
+	s.evalMu.Unlock()
+	return report, nil
+}
+
+func (s *Service) computeEvaluation(ctx context.Context, modelName, modelVersion *string) (*model.EvaluationReport, error) {
 	finished, err := s.loadFinished(ctx)
 	if err != nil {
 		return nil, err
@@ -30,8 +48,13 @@ func (s *Service) ModelEvaluation(ctx context.Context, modelName, modelVersion *
 		modelPreds map[string][]repository.ModelPrediction
 		benchPreds map[string][]repository.BenchmarkPrediction
 		comps      map[string]repository.Competition
+		byMinute   []repository.MinuteAccuracy
 	)
 	err = parallel(ctx,
+		func(ctx context.Context) (err error) {
+			byMinute, err = s.predictions.AccuracyByMinute(ctx)
+			return err
+		},
 		func(ctx context.Context) (err error) {
 			modelPreds, err = s.predictions.ModelForMatches(ctx, finished.ids)
 			return err
@@ -65,6 +88,7 @@ func (s *Service) ModelEvaluation(ctx context.Context, modelName, modelVersion *
 		Summary:                  computeSummary(preMatch),
 		Calibration:              computeCalibrationBins(preMatch),
 		ByMinuteBucket:           computeMinuteBuckets(scored),
+		ByMinute:                 toMinuteAccuracy(byMinute),
 		ByCompetition:            computeByCompetition(preMatch, finished, comps, benchPreds),
 		Benchmarks:               benchmarks,
 		MissingBenchmarkCoverage: 1 - float64(covered)/float64(len(finished.ids)),
@@ -290,7 +314,13 @@ func computeByCompetition(
 		}
 		out = append(out, m)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Competition.Name < out[j].Competition.Name })
+	sort.Slice(out, func(i, j int) bool {
+		a, b := out[i].Competition, out[j].Competition
+		if a.Name != b.Name {
+			return a.Name < b.Name
+		}
+		return deref(a.Season) > deref(b.Season) // newest season first
+	})
 	return out
 }
 
@@ -380,10 +410,26 @@ func outcomeFromRepo(o repository.Outcome) evaluation.Outcome {
 	return evaluation.OutcomeDraw
 }
 
+func toMinuteAccuracy(rows []repository.MinuteAccuracy) []*model.MinuteAccuracy {
+	out := make([]*model.MinuteAccuracy, 0, len(rows))
+	for _, r := range rows {
+		n := float64(r.SampleSize)
+		out = append(out, &model.MinuteAccuracy{
+			Minute:             r.Minute,
+			SampleSize:         r.SampleSize,
+			Accuracy:           float64(r.Correct) / n,
+			AsItStandsAccuracy: float64(r.AsItStands) / n,
+			BrierScore:         r.BrierSum / n,
+		})
+	}
+	return out
+}
+
 func emptyReport() *model.EvaluationReport {
 	return &model.EvaluationReport{
 		Calibration:    []*model.CalibrationBin{},
 		ByMinuteBucket: []*model.MinuteBucketMetric{},
+		ByMinute:       []*model.MinuteAccuracy{},
 		ByCompetition:  []*model.CompetitionMetric{},
 		Benchmarks:     []*model.BenchmarkEvaluationSummary{},
 	}

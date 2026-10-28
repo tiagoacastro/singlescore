@@ -104,6 +104,7 @@ type ComplexityRoot struct {
 	EvaluationReport struct {
 		Benchmarks               func(childComplexity int) int
 		ByCompetition            func(childComplexity int) int
+		ByMinute                 func(childComplexity int) int
 		ByMinuteBucket           func(childComplexity int) int
 		Calibration              func(childComplexity int) int
 		MissingBenchmarkCoverage func(childComplexity int) int
@@ -197,6 +198,14 @@ type ComplexityRoot struct {
 		HomeYellowCards   func(childComplexity int) int
 		Referee           func(childComplexity int) int
 		Source            func(childComplexity int) int
+	}
+
+	MinuteAccuracy struct {
+		Accuracy           func(childComplexity int) int
+		AsItStandsAccuracy func(childComplexity int) int
+		BrierScore         func(childComplexity int) int
+		Minute             func(childComplexity int) int
+		SampleSize         func(childComplexity int) int
 	}
 
 	MinuteBucketMetric struct {
@@ -558,6 +567,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.EvaluationReport.ByCompetition(childComplexity), true
+	case "EvaluationReport.byMinute":
+		if e.ComplexityRoot.EvaluationReport.ByMinute == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EvaluationReport.ByMinute(childComplexity), true
 	case "EvaluationReport.byMinuteBucket":
 		if e.ComplexityRoot.EvaluationReport.ByMinuteBucket == nil {
 			break
@@ -981,6 +996,37 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.MatchStats.Source(childComplexity), true
 
+	case "MinuteAccuracy.accuracy":
+		if e.ComplexityRoot.MinuteAccuracy.Accuracy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinuteAccuracy.Accuracy(childComplexity), true
+	case "MinuteAccuracy.asItStandsAccuracy":
+		if e.ComplexityRoot.MinuteAccuracy.AsItStandsAccuracy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinuteAccuracy.AsItStandsAccuracy(childComplexity), true
+	case "MinuteAccuracy.brierScore":
+		if e.ComplexityRoot.MinuteAccuracy.BrierScore == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinuteAccuracy.BrierScore(childComplexity), true
+	case "MinuteAccuracy.minute":
+		if e.ComplexityRoot.MinuteAccuracy.Minute == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinuteAccuracy.Minute(childComplexity), true
+	case "MinuteAccuracy.sampleSize":
+		if e.ComplexityRoot.MinuteAccuracy.SampleSize == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinuteAccuracy.SampleSize(childComplexity), true
+
 	case "MinuteBucketMetric.brierScore":
 		if e.ComplexityRoot.MinuteBucketMetric.BrierScore == nil {
 			break
@@ -1402,6 +1448,8 @@ func (ec *executionContext) childFields_EvaluationReport(ctx context.Context, fi
 		return ec.fieldContext_EvaluationReport_calibration(ctx, field)
 	case "byMinuteBucket":
 		return ec.fieldContext_EvaluationReport_byMinuteBucket(ctx, field)
+	case "byMinute":
+		return ec.fieldContext_EvaluationReport_byMinute(ctx, field)
 	case "byCompetition":
 		return ec.fieldContext_EvaluationReport_byCompetition(ctx, field)
 	case "benchmarks":
@@ -1588,6 +1636,22 @@ func (ec *executionContext) childFields_MatchStats(ctx context.Context, field gr
 		return ec.fieldContext_MatchStats_source(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type MatchStats", field.Name)
+}
+
+func (ec *executionContext) childFields_MinuteAccuracy(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "minute":
+		return ec.fieldContext_MinuteAccuracy_minute(ctx, field)
+	case "sampleSize":
+		return ec.fieldContext_MinuteAccuracy_sampleSize(ctx, field)
+	case "accuracy":
+		return ec.fieldContext_MinuteAccuracy_accuracy(ctx, field)
+	case "asItStandsAccuracy":
+		return ec.fieldContext_MinuteAccuracy_asItStandsAccuracy(ctx, field)
+	case "brierScore":
+		return ec.fieldContext_MinuteAccuracy_brierScore(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type MinuteAccuracy", field.Name)
 }
 
 func (ec *executionContext) childFields_MinuteBucketMetric(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -3094,6 +3158,38 @@ func (ec *executionContext) fieldContext_EvaluationReport_byMinuteBucket(_ conte
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_MinuteBucketMetric(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _EvaluationReport_byMinute(ctx context.Context, field graphql.CollectedField, obj *model.EvaluationReport) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EvaluationReport_byMinute(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ByMinute, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.MinuteAccuracy) graphql.Marshaler {
+			return ec.marshalNMinuteAccuracy2ᚕᚖgithubᚗcomᚋtiagocastroᚋsinglescoreᚋbackendᚋinternalᚋgraphᚋmodelᚐMinuteAccuracyᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EvaluationReport_byMinute(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "EvaluationReport",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_MinuteAccuracy(ctx, field)
 		},
 	}
 	return fc, nil
@@ -4787,6 +4883,121 @@ func (ec *executionContext) _MatchStats_source(ctx context.Context, field graphq
 }
 func (ec *executionContext) fieldContext_MatchStats_source(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("MatchStats", field, false, false, "String")
+}
+
+func (ec *executionContext) _MinuteAccuracy_minute(ctx context.Context, field graphql.CollectedField, obj *model.MinuteAccuracy) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MinuteAccuracy_minute(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Minute, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_MinuteAccuracy_minute(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MinuteAccuracy", field, false, false, "Int")
+}
+
+func (ec *executionContext) _MinuteAccuracy_sampleSize(ctx context.Context, field graphql.CollectedField, obj *model.MinuteAccuracy) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MinuteAccuracy_sampleSize(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.SampleSize, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_MinuteAccuracy_sampleSize(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MinuteAccuracy", field, false, false, "Int")
+}
+
+func (ec *executionContext) _MinuteAccuracy_accuracy(ctx context.Context, field graphql.CollectedField, obj *model.MinuteAccuracy) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MinuteAccuracy_accuracy(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Accuracy, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_MinuteAccuracy_accuracy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MinuteAccuracy", field, false, false, "Float")
+}
+
+func (ec *executionContext) _MinuteAccuracy_asItStandsAccuracy(ctx context.Context, field graphql.CollectedField, obj *model.MinuteAccuracy) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MinuteAccuracy_asItStandsAccuracy(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AsItStandsAccuracy, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_MinuteAccuracy_asItStandsAccuracy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MinuteAccuracy", field, false, false, "Float")
+}
+
+func (ec *executionContext) _MinuteAccuracy_brierScore(ctx context.Context, field graphql.CollectedField, obj *model.MinuteAccuracy) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MinuteAccuracy_brierScore(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.BrierScore, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_MinuteAccuracy_brierScore(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MinuteAccuracy", field, false, false, "Float")
 }
 
 func (ec *executionContext) _MinuteBucketMetric_minuteBucket(ctx context.Context, field graphql.CollectedField, obj *model.MinuteBucketMetric) (ret graphql.Marshaler) {
@@ -7145,6 +7356,11 @@ func (ec *executionContext) _EvaluationReport(ctx context.Context, sel ast.Selec
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "byMinute":
+			out.Values[i] = ec._EvaluationReport_byMinute(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "byCompetition":
 			out.Values[i] = ec._EvaluationReport_byCompetition(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -7706,6 +7922,59 @@ func (ec *executionContext) _MatchStats(ctx context.Context, sel ast.SelectionSe
 			}
 		case "source":
 			out.Values[i] = ec._MatchStats_source(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var minuteAccuracyImplementors = []string{"MinuteAccuracy"}
+
+func (ec *executionContext) _MinuteAccuracy(ctx context.Context, sel ast.SelectionSet, obj *model.MinuteAccuracy) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minuteAccuracyImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinuteAccuracy")
+		case "minute":
+			out.Values[i] = ec._MinuteAccuracy_minute(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sampleSize":
+			out.Values[i] = ec._MinuteAccuracy_sampleSize(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "accuracy":
+			out.Values[i] = ec._MinuteAccuracy_accuracy(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "asItStandsAccuracy":
+			out.Values[i] = ec._MinuteAccuracy_asItStandsAccuracy(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "brierScore":
+			out.Values[i] = ec._MinuteAccuracy_brierScore(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -8757,6 +9026,30 @@ func (ec *executionContext) unmarshalNMatchStatus2githubᚗcomᚋtiagocastroᚋs
 
 func (ec *executionContext) marshalNMatchStatus2githubᚗcomᚋtiagocastroᚋsinglescoreᚋbackendᚋinternalᚋgraphᚋmodelᚐMatchStatus(ctx context.Context, sel ast.SelectionSet, v model.MatchStatus) graphql.Marshaler {
 	return v
+}
+
+func (ec *executionContext) marshalNMinuteAccuracy2ᚕᚖgithubᚗcomᚋtiagocastroᚋsinglescoreᚋbackendᚋinternalᚋgraphᚋmodelᚐMinuteAccuracyᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.MinuteAccuracy) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNMinuteAccuracy2ᚖgithubᚗcomᚋtiagocastroᚋsinglescoreᚋbackendᚋinternalᚋgraphᚋmodelᚐMinuteAccuracy(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNMinuteAccuracy2ᚖgithubᚗcomᚋtiagocastroᚋsinglescoreᚋbackendᚋinternalᚋgraphᚋmodelᚐMinuteAccuracy(ctx context.Context, sel ast.SelectionSet, v *model.MinuteAccuracy) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "MinuteAccuracy!")
+		return graphql.Null
+	}
+	return ec._MinuteAccuracy(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNMinuteBucketMetric2ᚕᚖgithubᚗcomᚋtiagocastroᚋsinglescoreᚋbackendᚋinternalᚋgraphᚋmodelᚐMinuteBucketMetricᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.MinuteBucketMetric) graphql.Marshaler {

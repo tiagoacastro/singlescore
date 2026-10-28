@@ -15,6 +15,7 @@ package service
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -29,7 +30,20 @@ type Service struct {
 	matches     *repository.Matches
 	predictions *repository.Predictions
 	ingestion   *repository.Ingestion
+
+	// ModelEvaluation reads every stored forecast, and the data only
+	// changes when the hourly ingest runs, so reports are cached briefly.
+	evalMu    sync.Mutex
+	evalCache map[string]cachedReport
 }
+
+type cachedReport struct {
+	report *model.EvaluationReport
+	at     time.Time
+}
+
+// evaluationCacheTTL bounds how stale a cached evaluation report can be.
+const evaluationCacheTTL = 5 * time.Minute
 
 // New builds a Service from its collaborator repositories.
 func New(cat *repository.Catalog, m *repository.Matches, p *repository.Predictions, i *repository.Ingestion) *Service {
@@ -38,6 +52,7 @@ func New(cat *repository.Catalog, m *repository.Matches, p *repository.Predictio
 		matches:     m,
 		predictions: p,
 		ingestion:   i,
+		evalCache:   map[string]cachedReport{},
 	}
 }
 

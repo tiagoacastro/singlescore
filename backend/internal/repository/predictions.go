@@ -119,3 +119,57 @@ func (p *Predictions) BenchmarkForMatches(ctx context.Context, matchIDs []string
 	}
 	return out, rows.Err()
 }
+
+// MinuteAccuracy aggregates the model's snapshots at one match minute.
+type MinuteAccuracy struct {
+	Minute     int
+	SampleSize int
+	Correct    int // most likely outcome == final result
+	AsItStands int // scoreline at the minute == final result
+	BrierSum   float64
+}
+
+// AccuracyByMinute scores every pre-match and 5-minute-grid snapshot (45
+// is half-time) of finished matches whose timeline was built from real
+// event minutes, grouped by minute. Event-minute and full-time snapshots
+// are left out so every minute covers the same matches.
+func (p *Predictions) AccuracyByMinute(ctx context.Context) ([]MinuteAccuracy, error) {
+	const q = `
+		SELECT minute, COUNT(*),
+		       SUM(pick = final_result),
+		       SUM(standing = final_result),
+		       SUM(POW(p_home - (final_result = 'HOME'), 2) + POW(p_draw - (final_result = 'DRAW'), 2)
+		           + POW(p_away - (final_result = 'AWAY'), 2))
+		FROM (
+		  SELECT COALESCE(mp.match_minute, 0) AS minute, m.final_result,
+		         mp.p_home, mp.p_draw, mp.p_away,
+		         -- Same tie-break as evaluation.Argmax: home, then draw, then away.
+		         CASE WHEN mp.p_home >= mp.p_draw AND mp.p_home >= mp.p_away THEN 'HOME'
+		              WHEN mp.p_draw >= mp.p_away THEN 'DRAW' ELSE 'AWAY' END AS pick,
+		         CASE WHEN mp.home_score_at_fc > mp.away_score_at_fc THEN 'HOME'
+		              WHEN mp.home_score_at_fc < mp.away_score_at_fc THEN 'AWAY' ELSE 'DRAW' END AS standing
+		  FROM model_predictions mp
+		  JOIN matches m ON m.id = mp.match_id
+		  WHERE m.status = 'FINISHED' AND m.final_result IS NOT NULL
+		    AND COALESCE(mp.match_minute, 0) % 5 = 0 AND COALESCE(mp.match_minute, 0) < 90
+		    AND JSON_EXTRACT_STRING(mp.features_json, 'score_source') = 'events'
+		) t
+		GROUP BY minute
+		ORDER BY minute`
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	rows, err := p.pool.QueryContext(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("accuracy by minute: %w", err)
+	}
+	defer rows.Close()
+	var out []MinuteAccuracy
+	for rows.Next() {
+		var r MinuteAccuracy
+		if err := rows.Scan(&r.Minute, &r.SampleSize, &r.Correct, &r.AsItStands, &r.BrierSum); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}

@@ -218,10 +218,26 @@ type BenchmarkEvaluationSummary {
   accuracy: Float!
 }
 
+"""
+How often the result was called right at one point of the match, over
+every finished match whose timeline comes from real event minutes.
+"""
+type MinuteAccuracy {
+  """0 = pre-match, then the 5-minute grid; 45 is half-time."""
+  minute: Int!
+  sampleSize: Int!
+  """Share of matches where the model's most likely outcome was the final result."""
+  accuracy: Float!
+  """Share where the score at that minute was already the final result."""
+  asItStandsAccuracy: Float!
+  brierScore: Float!
+}
+
 type EvaluationReport {
   summary: EvaluationSummary
   calibration: [CalibrationBin!]!
   byMinuteBucket: [MinuteBucketMetric!]!
+  byMinute: [MinuteAccuracy!]!
   byCompetition: [CompetitionMetric!]!
   benchmarks: [BenchmarkEvaluationSummary!]!
   missingBenchmarkCoverage: Float!

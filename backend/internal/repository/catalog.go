@@ -38,7 +38,7 @@ func (c *Catalog) queryCompetitions(ctx context.Context, q string, args ...any) 
 
 // ListCompetitions returns competitions ordered by name.
 func (c *Catalog) ListCompetitions(ctx context.Context) ([]Competition, error) {
-	out, err := c.queryCompetitions(ctx, "SELECT "+competitionColumns+" FROM competitions ORDER BY name")
+	out, err := c.queryCompetitions(ctx, "SELECT "+competitionColumns+" FROM competitions ORDER BY name, season DESC")
 	if err != nil {
 		return nil, fmt.Errorf("list competitions: %w", err)
 	}

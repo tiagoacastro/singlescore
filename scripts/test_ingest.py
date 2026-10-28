@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import build_notebooks  # noqa: E402
 import ingest_events_espn as espn  # noqa: E402
 import ingest_season as season  # noqa: E402
-from ingest_common import LEAGUES  # noqa: E402
+from ingest_common import LEAGUES, SEASONS  # noqa: E402
 
 # Same table as TestBaseline_MatchesPythonPort in
 # backend/internal/prediction/baseline_test.go: (home_elo, away_elo,
@@ -192,7 +192,7 @@ class EspnParsingTest(unittest.TestCase):
 class CommonTest(unittest.TestCase):
     def test_competition_external_id_is_stable(self):
         # Hashed into competition ids; changing it would orphan rows.
-        self.assertEqual(LEAGUES[0].competition_external_id, "E0-2026-27")
+        self.assertEqual(LEAGUES[0].competition_external_id(SEASONS[-1]), "E0-2026-27")
 
 
 class NotebooksTest(unittest.TestCase):

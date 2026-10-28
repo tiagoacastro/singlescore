@@ -1,11 +1,12 @@
-"""Hourly idempotent ingest of the current season for every league in
-`ingest_common.LEAGUES` into SingleStore, from football-data.co.uk.
+"""Hourly idempotent ingest of the stored seasons (`ingest_common.SEASONS`)
+for every league in `ingest_common.LEAGUES` into SingleStore, from
+football-data.co.uk.
 
 Generated into `notebooks/season_ingest.ipynb` by
 `scripts/build_notebooks.py`; run locally with
 `python3 scripts/ingest_season.py`.
 
-Source: https://www.football-data.co.uk/mmz4281/<SEASON>/<DIV>.csv (public
+Source: https://www.football-data.co.uk/mmz4281/<season>/<DIV>.csv (public
 CSVs, free for personal/educational use per the site's terms).
 
 Design:
@@ -44,7 +45,7 @@ import pandas as pd
 import requests
 
 from ingest_common import (
-    LEAGUES, SEASON, SEASON_CODE, League, chunked, connect, det_id,
+    LEAGUES, SEASONS, League, Season, chunked, connect, det_id,
     load_local_env, record_run, upsert_many, utc_now,
 )
 
@@ -55,11 +56,11 @@ from ingest_common import (
 
 CSV_BASE_URL = environ.get("FD_CSV_BASE_URL", "https://www.football-data.co.uk/mmz4281")
 
-# Seasons walked before the current one so Elo doesn't restart at 1500
-# for everyone (oldest first). Between seasons each rating keeps
-# SEASON_CARRYOVER of its distance from the league mean, and promoted
-# clubs start at the average of the clubs they replaced.
-PREVIOUS_SEASON_CODES = ("2425", "2526")
+# Seasons walked (not stored) before the first stored season so Elo
+# doesn't start at 1500 for everyone, oldest first. Between seasons each
+# rating keeps SEASON_CARRYOVER of its distance from the league mean, and
+# promoted clubs start at the average of the clubs they replaced.
+SEED_SEASON_CODES = ("2324", "2425")
 SEASON_CARRYOVER = 0.8
 PROVIDER = "football-data-couk"
 JOB_NAME = "notebook-season"
@@ -290,9 +291,9 @@ def _elo_update(
 # ---------------------------------------------------------------------------
 
 
-def fetch_csv(league: League, season_code: str = SEASON_CODE) -> pd.DataFrame:
+def fetch_csv(league: League, season_code: str = SEASONS[-1].code) -> pd.DataFrame:
     url = f"{CSV_BASE_URL}/{season_code}/{league.code}.csv"
-    print(f"[fetch] {league.code} GET {url}")
+    print(f"[fetch] {league.code} {season_code} GET {url}")
     r = requests.get(url, timeout=30, allow_redirects=True)
     r.raise_for_status()
     df = pd.read_csv(io.StringIO(r.text))
@@ -309,7 +310,7 @@ def fetch_csv(league: League, season_code: str = SEASON_CODE) -> pd.DataFrame:
         .dt.tz_localize(None)
     )
     df = df.dropna(subset=["KickoffAt"]).sort_values("KickoffAt").reset_index(drop=True)
-    print(f"[fetch] {league.code} {len(df)} rows, {int(df['FTHG'].notna().sum())} played")
+    print(f"[fetch] {league.code} {season_code} {len(df)} rows, {int(df['FTHG'].notna().sum())} played")
     return df
 
 
@@ -337,19 +338,18 @@ def walk_elo(df: pd.DataFrame, ratings: dict[str, float]) -> dict[str, float]:
     return ratings
 
 
-def seed_ratings(league: League, teams: set[str]) -> dict[str, float]:
-    """Opening ratings for the current season, from the previous seasons'
-    results. Falls back to INITIAL_ELO for everyone if they can't be
-    fetched."""
+def seed_ratings(league: League) -> dict[str, float]:
+    """Closing ratings of the seed seasons (before the first stored one).
+    Empty if they can't be fetched, so ratings start at INITIAL_ELO."""
     ratings: dict[str, float] = {}
     try:
-        for code in PREVIOUS_SEASON_CODES:
+        for code in SEED_SEASON_CODES:
             df = fetch_csv(league, code)
             ratings = walk_elo(df, season_start_ratings(ratings, set(df["HomeTeam"]) | set(df["AwayTeam"])))
     except (requests.RequestException, ValueError, KeyError) as e:
-        print(f"[seed] {league.code} previous seasons unavailable ({e}); starting at {INITIAL_ELO}")
+        print(f"[seed] {league.code} seed seasons unavailable ({e}); starting at {INITIAL_ELO}")
         ratings = {}
-    return season_start_ratings(ratings, teams)
+    return ratings
 
 
 # ---------------------------------------------------------------------------
@@ -576,34 +576,36 @@ class Context:
     pred_rows: list[tuple]
     bench_rows: list[tuple]
     stats_rows: list[tuple]
+    final_ratings: dict[str, float]  # Elo after the season's played matches
 
 
 def build_rows(
-    league: League, df: pd.DataFrame,
+    league: League, season: Season, df: pd.DataFrame, previous: dict[str, float],
     events_by_match: dict[str, list[TimelineEvent]] | None = None,
     actions_by_match: dict[str, list[tuple[int, str, float]]] | None = None,
 ) -> Context:
-    """All rows for one league's season, walking Elo chronologically so
-    every snapshot of a match uses the pre-match ratings."""
+    """All rows for one league season, walking Elo chronologically from
+    the previous season's closing ratings so every snapshot of a match
+    uses the pre-match ratings."""
     events_by_match = events_by_match or {}
     actions_by_match = actions_by_match or {}
-    comp_id = det_id("competition", f"{PROVIDER}|{league.competition_external_id}")
+    comp_ext = league.competition_external_id(season)
+    comp_id = det_id("competition", f"{PROVIDER}|{comp_ext}")
     now = utc_now()
 
     team_names = sorted(set(df["HomeTeam"]) | set(df["AwayTeam"]))
     team_id = {name: det_id("team", f"{PROVIDER}|{name}") for name in team_names}
-    elo = seed_ratings(league, set(team_names))
+    elo = season_start_ratings(previous, set(team_names))
     ctx = Context(
-        comp_row=(comp_id, PROVIDER, league.competition_external_id,
-                  league.name, league.country, SEASON),
-        team_rows=[], match_rows=[], pred_rows=[], bench_rows=[], stats_rows=[],
+        comp_row=(comp_id, PROVIDER, comp_ext, league.name, league.country, season.name),
+        team_rows=[], match_rows=[], pred_rows=[], bench_rows=[], stats_rows=[], final_ratings={},
     )
 
     for _, row in df.iterrows():
         home, away = row["HomeTeam"], row["AwayTeam"]
         kickoff: datetime = row["KickoffAt"].to_pydatetime()
         # The id keys on the CSV's (UK) match date, not the UTC one.
-        ext_match = f"{SEASON}|{row['Date']:%Y-%m-%d}|{home}|{away}"
+        ext_match = f"{season.name}|{row['Date']:%Y-%m-%d}|{home}|{away}"
         match_id = det_id("match", f"{PROVIDER}|{ext_match}")
         home_elo, away_elo = elo[home], elo[away]
         played = not (pd.isna(row.get("FTHG")) or pd.isna(row.get("FTAG")))
@@ -645,6 +647,7 @@ def build_rows(
         (team_id[n], PROVIDER, n, n, n[:50], league.country, float(elo[n]))
         for n in team_names
     ]
+    ctx.final_ratings = elo
     return ctx
 
 
@@ -702,33 +705,47 @@ def main() -> int:
     started = utc_now()
     t0 = time.time()
 
-    frames: dict[str, pd.DataFrame] = {}
+    frames: dict[tuple[str, str], pd.DataFrame] = {}
     failed: dict[str, str] = {}
     for league in LEAGUES:
-        try:
-            frames[league.code] = fetch_csv(league)
-        except (requests.RequestException, ValueError, KeyError) as e:
-            print(f"[fetch] {league.code} failed: {e}")
-            failed[league.code] = str(e)
+        for season in SEASONS:
+            try:
+                frames[(league.code, season.code)] = fetch_csv(league, season.code)
+            except (requests.RequestException, ValueError, KeyError) as e:
+                print(f"[fetch] {league.code} {season.code} failed: {e}")
+                failed[f"{league.code}-{season.code}"] = str(e)
 
     conn = connect()
     try:
         events_by_match = load_timeline_events(conn)
         actions_by_match = load_pressure_actions(conn)
-        contexts = [
-            build_rows(league, frames[league.code], events_by_match, actions_by_match)
-            for league in LEAGUES if league.code in frames
-        ]
+        # Seasons in order per league, each starting from the previous
+        # one's closing ratings.
+        contexts: list[Context] = []
+        for league in LEAGUES:
+            ratings = seed_ratings(league)
+            for season in SEASONS:
+                df = frames.get((league.code, season.code))
+                if df is None:
+                    continue
+                ctx = build_rows(league, season, df, ratings, events_by_match, actions_by_match)
+                ratings = ctx.final_ratings
+                contexts.append(ctx)
         # Team ids hash the bare CSV name, so the same name in two
         # leagues would merge two clubs into one row.
         seen: dict[str, str] = {}
         for ctx in contexts:
+            code = ctx.comp_row[2].split("-")[0]
             for t in ctx.team_rows:
-                if seen.setdefault(t[2], ctx.comp_row[2]) != ctx.comp_row[2]:
+                if seen.setdefault(t[2], code) != code:
                     raise SystemExit(f"team name {t[2]!r} appears in two leagues")
 
         def rows(attr: str) -> list[tuple]:
             return [r for ctx in contexts for r in getattr(ctx, attr)]
+
+        # A club appears once per stored season; the latest season's row
+        # (current Elo) wins.
+        team_rows = list({r[0]: r for r in rows("team_rows")}.values())
 
         pred_rows = rows("pred_rows")
         event_driven = sorted({
@@ -743,7 +760,7 @@ def main() -> int:
                 "played": sum(1 for r in ctx.match_rows if r[7] == "FINISHED"),
                 "event_driven": len(match_ids.intersection(event_driven)),
             }
-            print(f"[build] {ctx.comp_row[3]}: {per_league[ctx.comp_row[2]]}")
+            print(f"[build] {ctx.comp_row[3]} {ctx.comp_row[5]}: {per_league[ctx.comp_row[2]]}")
 
         with conn.cursor() as cur:
             # Event-minute snapshots move if ESPN corrects a minute, so
@@ -760,7 +777,7 @@ def main() -> int:
             written = sum((
                 upsert_many(cur, "competitions", COMP_COLS, COMP_UPDATE,
                             [ctx.comp_row for ctx in contexts]),
-                upsert_many(cur, "teams", TEAM_COLS, TEAM_UPDATE, rows("team_rows")),
+                upsert_many(cur, "teams", TEAM_COLS, TEAM_UPDATE, team_rows),
                 upsert_many(cur, "matches", MATCH_COLS, MATCH_UPDATE, rows("match_rows")),
                 upsert_many(cur, "model_predictions", PRED_COLS, PRED_UPDATE, pred_rows),
                 upsert_many(cur, "benchmark_predictions", BENCH_COLS, BENCH_UPDATE,
@@ -781,7 +798,7 @@ def main() -> int:
                 status=status, records_in=sum(len(df) for df in frames.values()),
                 records_out=written,
                 error="; ".join(f"{k}: {v}" for k, v in failed.items()) or None,
-                details={"season": SEASON, "csv_base_url": CSV_BASE_URL,
+                details={"seasons": [s.name for s in SEASONS], "csv_base_url": CSV_BASE_URL,
                          "model": MODEL_NAME, "model_version": MODEL_VERSION,
                          "leagues": per_league},
             )

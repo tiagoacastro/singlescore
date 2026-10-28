@@ -67,10 +67,14 @@ JOB_NAME = "espn-events"
 BACKFILL_LOOKBACK_DAYS = int(environ.get("ESPN_LOOKBACK_DAYS", "7"))
 
 # ESPN team displayName -> football-data.co.uk name (the name the season
-# ingest hashes into team/match ids), per league code.
+# ingest hashes into team/match ids), per league code, covering every
+# club in the stored seasons.
 TEAM_NAME_MAPS: dict[str, dict[str, str]] = {
     "E0": {
         "AFC Bournemouth": "Bournemouth",
+        "Burnley": "Burnley",
+        "West Ham United": "West Ham",
+        "Wolverhampton Wanderers": "Wolves",
         "Arsenal": "Arsenal",
         "Aston Villa": "Aston Villa",
         "Brentford": "Brentford",
@@ -93,6 +97,9 @@ TEAM_NAME_MAPS: dict[str, dict[str, str]] = {
     },
     "SP1": {
         "Alavés": "Alaves",
+        "Girona": "Girona",
+        "Mallorca": "Mallorca",
+        "Real Oviedo": "Oviedo",
         "Athletic Club": "Ath Bilbao",
         "Atlético Madrid": "Ath Madrid",
         "Barcelona": "Barcelona",
@@ -115,6 +122,9 @@ TEAM_NAME_MAPS: dict[str, dict[str, str]] = {
     },
     "I1": {
         "AC Milan": "Milan",
+        "Cremonese": "Cremonese",
+        "Hellas Verona": "Verona",
+        "Pisa": "Pisa",
         "AS Roma": "Roma",
         "Atalanta": "Atalanta",
         "Bologna": "Bologna",
@@ -136,7 +146,10 @@ TEAM_NAME_MAPS: dict[str, dict[str, str]] = {
         "Venezia": "Venezia",
     },
     "D1": {
+        "1. FC Heidenheim 1846": "Heidenheim",
         "1. FC Union Berlin": "Union Berlin",
+        "St. Pauli": "St Pauli",
+        "VfL Wolfsburg": "Wolfsburg",
         "Bayer Leverkusen": "Leverkusen",
         "Bayern Munich": "Bayern Munich",
         "Borussia Dortmund": "Dortmund",
@@ -156,7 +169,9 @@ TEAM_NAME_MAPS: dict[str, dict[str, str]] = {
         "Werder Bremen": "Werder Bremen",
     },
     "P1": {
+        "AVS": "AVS",
         "Académico de Viseu": "Academico Viseu",
+        "Tondela": "Tondela",
         "Alverca": "Alverca",
         "Arouca": "Arouca",
         "Benfica": "Benfica",
