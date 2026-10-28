@@ -8,6 +8,7 @@ import { MatchScoreCard } from '@/components/MatchScoreCard';
 import { MatchEventList } from '@/components/MatchEventList';
 import { MatchStatsPanel } from '@/components/MatchStatsPanel';
 import { MatchCommentaryPanel } from '@/components/MatchCommentaryPanel';
+import { MomentumChart } from '@/components/MomentumChart';
 import { OpportunityTimeline } from '@/components/OpportunityTimeline';
 import { ProbabilityTimeline } from '@/components/ProbabilityTimeline';
 import { BenchmarkTable } from '@/components/BenchmarkTable';
@@ -65,6 +66,8 @@ export function MatchDetailPage() {
           <section className="card">
             <ProbabilityTimeline match={m} />
           </section>
+
+          <MomentumChart match={m} />
 
           <OpportunityTimeline match={m} />
 

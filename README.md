@@ -148,17 +148,21 @@ substring), with filters kept in the URL.
 ## Model honesty
 
 - Predictions come from an internal, transparent model (`elo-poisson
-  v0.3.0`): a Poisson race over the remaining playing time (stoppage time
-  included) with Elo-driven scoring rates, home advantage, and red cards
-  that lower the carded side's rate and raise the opponent's. Elo ratings
+  v0.4.0`): a Poisson race over the remaining playing time (stoppage time
+  included) with Elo-driven scoring rates, home advantage, red cards that
+  lower the carded side's rate and raise the opponent's, and a gentle tilt
+  towards the side on top (weighted shots, corners, attacking free kicks
+  and offsides over the last 15 minutes; the match page's "Who's on top"
+  chart shows the same index). Elo ratings
   are seeded from the previous two seasons and updated on a 50/50 blend
   of goals and shot quality (shots on target ≈ 0.3 goals).
 - `scripts/backtest_model.py` replays every match and scores each change
-  separately on both halves of the season. Against v0.2.0, v0.3.0 cuts the
+  separately on both halves of the season. Against v0.2.0, v0.4.0 cuts the
   pre-match Brier score from 0.640 to 0.609 and the all-snapshot Brier
-  from 0.485 to 0.470. Tried and rejected because they didn't improve
+  from 0.485 to 0.468. Tried and rejected because they didn't improve
   held-out matches: an in-match xG update of the scoring rates (built from
-  the commentary's shot locations) and game-state effects.
+  the commentary's shot locations), stronger momentum tilts, and
+  game-state effects.
 - Nothing in the UI claims this model beats any benchmark.
 - Every snapshot stores `(forecast_at, match_minute, home_score_at_fc,
   away_score_at_fc, model_version, provenance)` so evaluation is

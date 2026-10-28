@@ -36,10 +36,13 @@ class Snapshot:
     as_: int
     hr: int
     ar: int
+    hp: float  # pressure over the last PRESSURE_WINDOW minutes
+    ap: float
 
 
 @dataclass
 class Case:
+    match_id: str
     kickoff: object
     outcome: int  # 0 home, 1 draw, 2 away
     elo: dict  # ratings name -> (home_elo, away_elo) before the match
@@ -62,6 +65,7 @@ def build_cases() -> list[Case]:
     conn = connect()
     try:
         events = m.load_timeline_events(conn)
+        actions = m.load_pressure_actions(conn)
     finally:
         conn.close()
     cases: list[Case] = []
@@ -91,9 +95,11 @@ def build_cases() -> list[Case]:
             match_id = det_id("match", f"{m.PROVIDER}|{m.SEASON}|{row['Date']:%Y-%m-%d}|{home}|{away}")
             ev = events.get(match_id)
             if ev is not None and m._state_at(ev, 200)[:2] == (hs_ft, as_ft):
-                snaps = [Snapshot(t, *m._state_at(ev, t)) for t in SNAPSHOT_MINUTES]
+                acts = actions.get(match_id, [])
+                snaps = [Snapshot(t, *m._state_at(ev, t), *m.pressure_at(acts, t))
+                         for t in SNAPSHOT_MINUTES]
                 outcome = 0 if hs_ft > as_ft else 2 if hs_ft < as_ft else 1
-                cases.append(Case(row["KickoffAt"], outcome,
+                cases.append(Case(match_id, row["KickoffAt"], outcome,
                                   {n: (r[home], r[away]) for n, r in ratings.items()}, snaps))
             for name, r in ratings.items():
                 r[home], r[away] = m._elo_update(r[home], r[away], *perf[name](row))
@@ -111,7 +117,7 @@ def evaluate(cases: list[Case], model, ratings: str) -> dict[str, tuple[float, f
         he, ae = c.elo[ratings]
         for s in c.snapshots:
             bucket = next(b[0] for b in BUCKETS if b[1] <= s.minute <= b[2])
-            brier, ll = score(model(he, ae, s.hs, s.as_, s.minute, s.hr, s.ar), c.outcome)
+            brier, ll = score(model(he, ae, s), c.outcome)
             a = acc[bucket]
             a[0] += brier
             a[1] += ll
@@ -136,11 +142,21 @@ def main() -> int:
     }
     print(f"{len(cases)} matches with consistent per-event data (halves split at {cut:%Y-%m-%d})")
     print("Brier score, lower is better: pre-match | all snapshots, per half of the season\n")
+    def v2(he, ae, s):
+        return m.predict(he, ae, s.hs, s.as_, s.minute, s.hr, s.ar)
+
+    def v3(he, ae, s):
+        return m.predict_v3(he, ae, s.hs, s.as_, s.minute, s.hr, s.ar)
+
+    def v4(he, ae, s):
+        return m.predict_v3(he, ae, s.hs, s.as_, s.minute, s.hr, s.ar, s.hp, s.ap)
+
     variants = [
-        ("v0.2.0 (flat Elo from 1500, 90-minute clock)", m.predict, "flat, goals"),
-        ("+ Elo seeded from 2 previous seasons", m.predict, "seeded, goals"),
-        ("+ Elo updated on goals + shot quality", m.predict, "seeded, goals+shots"),
-        ("+ stoppage time, two-sided red cards = v0.3.0", m.predict_v3, "seeded, goals+shots"),
+        ("v0.2.0 (flat Elo from 1500, 90-minute clock)", v2, "flat, goals"),
+        ("+ Elo seeded from 2 previous seasons", v2, "seeded, goals"),
+        ("+ Elo updated on goals + shot quality", v2, "seeded, goals+shots"),
+        ("+ stoppage time, two-sided red cards (v0.3.0)", v3, "seeded, goals+shots"),
+        ("+ tilt towards the side on top = v0.4.0", v4, "seeded, goals+shots"),
     ]
     for name, model, ratings in variants:
         cells = []

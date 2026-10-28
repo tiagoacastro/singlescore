@@ -102,10 +102,11 @@ notebooks.
 
 ## The model
 
-`ingest_season.py` writes `elo-poisson v0.3.0` (`predict_v3`): the
+`ingest_season.py` writes `elo-poisson v0.4.0` (`predict_v3`): the
 Poisson race of the Go reference (`backend/internal/prediction`, v0.2.0,
-mirrored by `predict`) plus stoppage time and a two-sided red-card effect,
-on Elo ratings seeded from the previous two seasons
+mirrored by `predict`) plus stoppage time, a two-sided red-card effect and
+a tilt towards the side on top (pressure from the commentary), on Elo
+ratings seeded from the previous two seasons
 (`PREVIOUS_SEASON_CODES`) and updated on goals + shot quality. A run
 replaces snapshots from other versions of the model.
 

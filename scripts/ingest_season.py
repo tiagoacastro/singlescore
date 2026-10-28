@@ -68,7 +68,7 @@ JOB_NAME = "notebook-season"
 # the parity tests on both sides (TestBaseline_MatchesPythonPort and
 # scripts/test_ingest.py) pin the same golden values.
 MODEL_NAME = "elo-poisson"
-MODEL_VERSION = "v0.3.0"  # predict_v3; v0.2.0 (predict) is the Go baseline
+MODEL_VERSION = "v0.4.0"  # predict_v3; v0.2.0 (predict) is the Go baseline
 
 AVG_GOALS_PER_TEAM = 1.35
 ELO_HALF_LIFE = 800.0  # goal-rate ratio is exp(elo_gap / this)
@@ -157,6 +157,21 @@ MATCH_MINUTES = 90 + EXPECTED_ADDED_1H + EXPECTED_ADDED_2H
 # the opponent's rises, per extra red card.
 RED_CARD_OPPONENT = 1.3
 
+# Who is on top: attacking actions from the commentary, weighted, over
+# the last PRESSURE_WINDOW minutes. Shots count more from close range and
+# less from distance. The remaining scoring rates are tilted towards the
+# side with more of the pressure; PRESSURE_PRIOR pseudo-actions per side
+# keep a single shot from swinging it, and the backtest found a gentle
+# tilt best (stronger ones over-react).
+PRESSURE_WEIGHTS = {
+    "GOAL": 1.0, "ATTEMPT_SAVED": 0.6, "ATTEMPT_MISSED": 0.35, "ATTEMPT_BLOCKED": 0.3,
+    "PENALTY_MISSED": 0.8, "PENALTY_SAVED": 0.8, "CORNER": 0.35, "OFFSIDE": 0.1,
+}
+ATTACKING_FREE_KICK_WEIGHT = 0.2
+PRESSURE_WINDOW = 15
+PRESSURE_PRIOR = 2.0
+PRESSURE_TILT = 0.25
+
 
 def minutes_remaining(minute: int) -> float:
     """Expected playing time left after base `minute` (45 = half-time,
@@ -170,14 +185,55 @@ def minutes_remaining(minute: int) -> float:
     return 0.0
 
 
+def action_weight(kind: str, text: str) -> float:
+    """Pressure weight of one commentary line (0 for non-attacking ones)."""
+    if kind == "FREE_KICK":
+        return ATTACKING_FREE_KICK_WEIGHT if "attacking half" in text else 0.0
+    w = PRESSURE_WEIGHTS.get(kind, 0.0)
+    if kind == "GOAL" or kind.startswith("ATTEMPT"):
+        t = text.lower()
+        if "very close range" in t or "six yard box" in t:
+            w *= 1.5
+        elif "outside the box" in t or "long range" in t:
+            w *= 0.6
+    return w
+
+
+def load_pressure_actions(conn) -> dict[str, list[tuple[int, str, float]]]:
+    """(minute, side, weight) of every attacking action, per match."""
+    out: dict[str, list[tuple[int, str, float]]] = {}
+    with conn.cursor() as cur:
+        cur.execute("""SELECT match_id, minute, team_side, kind, text FROM match_commentary
+                       WHERE minute IS NOT NULL AND team_side IN ('HOME', 'AWAY')""")
+        for match_id, minute, side, kind, text in cur.fetchall():
+            w = action_weight(kind, text)
+            if w:
+                out.setdefault(match_id, []).append((int(minute), side, w))
+    return out
+
+
+def pressure_at(actions: list[tuple[int, str, float]], minute: int) -> tuple[float, float]:
+    """(home, away) pressure over the PRESSURE_WINDOW minutes up to `minute`."""
+    home = away = 0.0
+    for m, side, w in actions:
+        if minute - PRESSURE_WINDOW < m <= minute:
+            if side == "HOME":
+                home += w
+            else:
+                away += w
+    return home, away
+
+
 def predict_v3(
     home_elo: float, away_elo: float, home_score: int, away_score: int,
     minute: int, home_red: int = 0, away_red: int = 0,
+    home_pressure: float = 0.0, away_pressure: float = 0.0,
 ) -> tuple[float, float, float]:
-    """v0.3.0: the v0.2.0 Poisson race with stoppage time counted in the
-    remaining time, and red cards that also lift the opponent's rate.
-    (Its Elo ratings are seeded from previous seasons and updated on goals
-    + shot quality; see seed_ratings / match_performance.)"""
+    """v0.4.0: the v0.2.0 Poisson race with stoppage time counted in the
+    remaining time, red cards that also lift the opponent's rate, and the
+    rates tilted towards the side on top (recent pressure). Its Elo
+    ratings are seeded from previous seasons and updated on goals + shot
+    quality (see seed_ratings / match_performance)."""
     rate_h, rate_a = elo_goal_rates(home_elo, away_elo)
     imb = home_red - away_red
     if imb > 0:
@@ -186,6 +242,9 @@ def predict_v3(
     elif imb < 0:
         rate_a *= RED_CARD_FACTOR ** (-imb)
         rate_h *= RED_CARD_OPPONENT ** (-imb)
+    on_top = (home_pressure + PRESSURE_PRIOR) / (home_pressure + away_pressure + 2 * PRESSURE_PRIOR)
+    rate_h *= (2 * on_top) ** PRESSURE_TILT
+    rate_a *= (2 * (1 - on_top)) ** PRESSURE_TILT
     share = minutes_remaining(minute) / MATCH_MINUTES
     return poisson_race(rate_h * share, rate_a * share, home_score - away_score)
 
@@ -360,6 +419,7 @@ def _make_prediction_rows(
     match_id: str, kickoff: datetime, home_elo: float, away_elo: float,
     hs_ht: int, as_ht: int, hs_ft: int | None, as_ft: int | None,
     events: list[TimelineEvent] | None = None,
+    actions: list[tuple[int, str, float]] | None = None,
 ) -> list[tuple]:
     """Retrospective timeline for a match: a pre-match row for every
     fixture, and for played matches the 5-minute grid + half-time +
@@ -380,10 +440,12 @@ def _make_prediction_rows(
 
     def add(minute: int, origin: str, forecast_at: datetime,
             hs: int, as_: int, hr: int = 0, ar: int = 0) -> None:
-        p_h, p_d, p_a = predict_v3(home_elo, away_elo, hs, as_, minute, hr, ar)
+        hp, ap = pressure_at(actions or [], minute)
+        p_h, p_d, p_a = predict_v3(home_elo, away_elo, hs, as_, minute, hr, ar, hp, ap)
         features = {
             "home_elo": home_elo, "away_elo": away_elo, "minute": minute,
             "home_score": hs, "away_score": as_, "home_red": hr, "away_red": ar,
+            "home_pressure": round(hp, 2), "away_pressure": round(ap, 2),
             "home_advantage": HOME_ADVANTAGE, "model": MODEL_NAME,
             "model_version": MODEL_VERSION, "source_provider": PROVIDER,
             "score_source": score_source, "origin": origin,
@@ -519,10 +581,12 @@ class Context:
 def build_rows(
     league: League, df: pd.DataFrame,
     events_by_match: dict[str, list[TimelineEvent]] | None = None,
+    actions_by_match: dict[str, list[tuple[int, str, float]]] | None = None,
 ) -> Context:
     """All rows for one league's season, walking Elo chronologically so
     every snapshot of a match uses the pre-match ratings."""
     events_by_match = events_by_match or {}
+    actions_by_match = actions_by_match or {}
     comp_id = det_id("competition", f"{PROVIDER}|{league.competition_external_id}")
     now = utc_now()
 
@@ -565,6 +629,7 @@ def build_rows(
         ctx.pred_rows.extend(_make_prediction_rows(
             match_id, kickoff, home_elo, away_elo, hs_ht, as_ht, hs_ft, as_ft,
             events_by_match.get(match_id) if played else None,
+            actions_by_match.get(match_id),
         ))
         bench = _make_benchmark_row(row, match_id, kickoff, hs_ft, as_ft)
         if bench is not None:
@@ -649,8 +714,9 @@ def main() -> int:
     conn = connect()
     try:
         events_by_match = load_timeline_events(conn)
+        actions_by_match = load_pressure_actions(conn)
         contexts = [
-            build_rows(league, frames[league.code], events_by_match)
+            build_rows(league, frames[league.code], events_by_match, actions_by_match)
             for league in LEAGUES if league.code in frames
         ]
         # Team ids hash the bare CSV name, so the same name in two
@@ -691,13 +757,6 @@ def main() -> int:
                               IN ('goal-event', 'red-card-event')""",
                     (MODEL_NAME, MODEL_VERSION, *chunk),
                 )
-            # Snapshots from other versions of this model would be mixed
-            # into the charts and the evaluation; they're derived data,
-            # so the current version replaces them.
-            cur.execute(
-                "DELETE FROM model_predictions WHERE model_name = %s AND model_version <> %s",
-                (MODEL_NAME, MODEL_VERSION),
-            )
             written = sum((
                 upsert_many(cur, "competitions", COMP_COLS, COMP_UPDATE,
                             [ctx.comp_row for ctx in contexts]),
@@ -708,6 +767,14 @@ def main() -> int:
                             rows("bench_rows")),
                 upsert_many(cur, "match_stats", STATS_COLS, STATS_UPDATE, rows("stats_rows")),
             ))
+            # Snapshots from other versions of this model would be mixed
+            # into the charts and the evaluation; they're derived data, so
+            # the current version replaces them. Deleted after the new rows
+            # are written so no match is ever left without a prediction.
+            cur.execute(
+                "DELETE FROM model_predictions WHERE model_name = %s AND model_version <> %s",
+                (MODEL_NAME, MODEL_VERSION),
+            )
             status = "SUCCEEDED" if not failed else "PARTIAL" if contexts else "FAILED"
             record_run(
                 cur, provider=PROVIDER, job_name=JOB_NAME, started_at=started,

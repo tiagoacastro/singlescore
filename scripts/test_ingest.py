@@ -70,6 +70,22 @@ class ModelV3Test(unittest.TestCase):
         self.assertGreater(carded[2], base[2])
         self.assertGreater(carded[2], season.predict(1500, 1500, 0, 0, 30, home_red=1)[2])
 
+    def test_pressure_tilts_towards_the_side_on_top(self):
+        level = season.predict_v3(1500, 1500, 0, 0, 30)
+        home_on_top = season.predict_v3(1500, 1500, 0, 0, 30, home_pressure=4.0, away_pressure=0.5)
+        self.assertGreater(home_on_top[0], level[0])
+        self.assertLess(home_on_top[2], level[2])
+
+    def test_action_weights(self):
+        self.assertEqual(season.action_weight("FREE_KICK", "X wins a free kick in the defensive half."), 0)
+        self.assertEqual(season.action_weight("FREE_KICK", "X wins a free kick in the attacking half."),
+                         season.ATTACKING_FREE_KICK_WEIGHT)
+        self.assertAlmostEqual(season.action_weight("ATTEMPT_SAVED", "Shot from very close range"), 0.9)
+        self.assertEqual(season.action_weight("SUBSTITUTION", "Substitution, Liverpool."), 0)
+        acts = [(10, "HOME", 0.6), (20, "AWAY", 0.35), (40, "HOME", 1.0)]
+        self.assertEqual(season.pressure_at(acts, 24), (0.6, 0.35))  # minutes 10-24
+        self.assertEqual(season.pressure_at(acts, 40), (1.0, 0.0))  # 15-minute window
+
     def test_season_start_ratings(self):
         prev = {"A": 1600.0, "B": 1500.0, "C": 1400.0}
         start = season.season_start_ratings(prev, {"A", "B", "D"})

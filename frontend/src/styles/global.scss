@@ -243,6 +243,33 @@
   }
 }
 
+// Who's on top: momentum bars + 15-minute summary.
+.momentum { margin: 0 -#{$space-2}; }
+
+.momentum-blocks {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: $space-2;
+  margin-top: $space-3;
+
+  &__item {
+    display: grid;
+    gap: 2px;
+    padding: $space-2;
+    border-radius: $radius-md;
+    background: $color-bg-raised;
+    border-top: 2px solid $color-border;
+    font-size: $fs-xs;
+    min-width: 0;
+
+    &--home { border-top-color: $color-prob-home; }
+    &--away { border-top-color: $color-prob-away; }
+  }
+  &__label { color: $color-text-muted; font-feature-settings: 'tnum'; }
+  &__team { color: $color-text-primary; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  &__share { color: $color-text-secondary; font-feature-settings: 'tnum'; }
+}
+
 // Opportunity map (SVG shot map) + its legend.
 .shot-map {
   overflow-x: auto;

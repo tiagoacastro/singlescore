@@ -8,6 +8,7 @@ import { formatNumber, formatPct, formatRelative } from '@/lib/format';
 
 export function DashboardPage() {
   const { data, loading, error } = useQuery<{ dashboard: Dashboard }>(DASHBOARD_QUERY, {
+    fetchPolicy: 'cache-and-network',
     errorPolicy: 'all',
   });
   const dash = data?.dashboard;

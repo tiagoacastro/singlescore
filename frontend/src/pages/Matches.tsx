@@ -47,6 +47,8 @@ export function MatchesPage() {
     MATCH_LIST_QUERY,
     {
       variables: { competitionId, team: team || null, first: PAGE_SIZE },
+      // Light query; refresh on every visit so an hourly ingest shows up.
+      fetchPolicy: 'cache-and-network',
       errorPolicy: 'all',
       notifyOnNetworkStatusChange: true,
     },
