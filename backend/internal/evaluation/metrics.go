@@ -161,10 +161,10 @@ func Compute(preds []Prediction) (Summary, int) {
 	return s, skipped
 }
 
-// CalibrationBin reports empirical calibration for predictions whose
-// top (argmax) probability falls in [BinLow, BinHigh): AvgPredicted is
-// the mean of that probability, ObservedFrequency how often the argmax
-// outcome actually happened.
+// CalibrationBin reports how often outcomes forecast with a probability
+// in [BinLow, BinHigh) actually happened: AvgPredicted is the mean
+// forecast probability in the bin, ObservedFrequency the share that came
+// true. A well-calibrated model has the two roughly equal.
 type CalibrationBin struct {
 	BinLow            float64
 	BinHigh           float64
@@ -173,62 +173,40 @@ type CalibrationBin struct {
 	SampleSize        int
 }
 
-// Calibration returns a reliability diagram: predictions are grouped by
-// the probability assigned to the predicted class (argmax), and the
-// observed frequency is the fraction of those predictions where the
-// predicted class matched the actual outcome. Perfect calibration lies
-// on the diagonal (avgPredicted == observedFrequency).
-//
-// Default is 10 equal-width bins over [0, 1].
+// Calibration bins every outcome probability of every prediction (home,
+// draw and away each count once), the standard multiclass reliability
+// diagram. Invalid predictions are skipped.
 func Calibration(preds []Prediction, nBins int) []CalibrationBin {
 	if nBins <= 0 {
 		nBins = 10
 	}
 	bins := make([]CalibrationBin, nBins)
 	for i := range bins {
-		lo := float64(i) / float64(nBins)
-		hi := float64(i+1) / float64(nBins)
-		bins[i] = CalibrationBin{BinLow: lo, BinHigh: hi}
+		bins[i] = CalibrationBin{BinLow: float64(i) / float64(nBins), BinHigh: float64(i+1) / float64(nBins)}
 	}
-
-	type agg struct {
-		sumPred, sumHit float64
-		n               int
-	}
-	a := make([]agg, nBins)
-
+	sumPred := make([]float64, nBins)
+	sumHit := make([]float64, nBins)
 	for _, p := range preds {
 		if err := p.Validate(); err != nil {
 			continue
 		}
 		ph, pd, pa := p.probsNormalized()
-		// Predicted class = argmax; its probability drives the bin.
-		pPred := ph
-		predClass := OutcomeHome
-		if pd > pPred {
-			pPred, predClass = pd, OutcomeDraw
+		for _, o := range [...]struct {
+			prob    float64
+			outcome Outcome
+		}{{ph, OutcomeHome}, {pd, OutcomeDraw}, {pa, OutcomeAway}} {
+			idx := min(int(o.prob*float64(nBins)), nBins-1) // 1.0 goes in the last bin
+			sumPred[idx] += o.prob
+			if o.outcome == p.Actual {
+				sumHit[idx]++
+			}
+			bins[idx].SampleSize++
 		}
-		if pa > pPred {
-			pPred, predClass = pa, OutcomeAway
-		}
-		hit := 0.0
-		if predClass == p.Actual {
-			hit = 1.0
-		}
-		// Bin index: clamp pPred == 1.0 into the last bin.
-		idx := int(pPred * float64(nBins))
-		if idx >= nBins {
-			idx = nBins - 1
-		}
-		a[idx].sumPred += pPred
-		a[idx].sumHit += hit
-		a[idx].n++
 	}
 	for i := range bins {
-		if a[i].n > 0 {
-			bins[i].AvgPredicted = a[i].sumPred / float64(a[i].n)
-			bins[i].ObservedFrequency = a[i].sumHit / float64(a[i].n)
-			bins[i].SampleSize = a[i].n
+		if n := bins[i].SampleSize; n > 0 {
+			bins[i].AvgPredicted = sumPred[i] / float64(n)
+			bins[i].ObservedFrequency = sumHit[i] / float64(n)
 		}
 	}
 	return bins

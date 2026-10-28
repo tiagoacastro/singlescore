@@ -59,16 +59,16 @@ test.describe('Evaluation', () => {
     await expect(metricValues.nth(0)).not.toHaveText('—', { timeout: 20_000 });
     await expect(metricValues.nth(1)).not.toHaveText('—', { timeout: 20_000 });
 
-    // Calibration chart renders with an X-axis bin label. Recharts animates
-    // the bars themselves, so the rectangles can report "hidden" to Playwright
-    // for a few frames; the axis labels are static text and are a stable
-    // signal that the chart data arrived and painted.
+    // Calibration renders as a reliability curve (axis label is static
+    // text, a stable signal that the chart painted).
     await expect(page.locator('.chart-wrap svg').first()).toBeVisible({ timeout: 15_000 });
-    await expect(page.locator('.chart-wrap svg').first().getByText('50–60%')).toBeVisible({
-      timeout: 20_000,
-    });
+    await expect(page.getByText('Forecast probability')).toBeVisible({ timeout: 20_000 });
 
-    // The by-minute-bucket table should list several buckets.
-    await expect(page.getByRole('cell', { name: 'pre-match' })).toBeVisible({ timeout: 15_000 });
+    // Per-league table compares the model with the market.
+    const byLeague = page.locator('section.card', { has: page.getByRole('heading', { name: 'By league' }) });
+    await expect(byLeague.locator('tbody tr')).toHaveCount(5, { timeout: 15_000 });
+
+    // The by-minute table lists the pre-match bucket.
+    await expect(page.getByRole('cell', { name: 'Pre-match', exact: true })).toBeVisible({ timeout: 15_000 });
   });
 });

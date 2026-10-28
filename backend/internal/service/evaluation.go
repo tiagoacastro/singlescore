@@ -65,7 +65,7 @@ func (s *Service) ModelEvaluation(ctx context.Context, modelName, modelVersion *
 		Summary:                  computeSummary(preMatch),
 		Calibration:              computeCalibrationBins(preMatch),
 		ByMinuteBucket:           computeMinuteBuckets(scored),
-		ByCompetition:            computeByCompetition(preMatch, finished.competition, comps),
+		ByCompetition:            computeByCompetition(preMatch, finished, comps, benchPreds),
 		Benchmarks:               benchmarks,
 		MissingBenchmarkCoverage: 1 - float64(covered)/float64(len(finished.ids)),
 	}, nil
@@ -250,31 +250,58 @@ func computeMinuteBuckets(scored []scoredPred) []*model.MinuteBucketMetric {
 	return out
 }
 
+// computeByCompetition scores the (pre-match) predictions per
+// competition, next to the market's pre-match odds on the same matches.
 func computeByCompetition(
-	scored []scoredPred, compByMatch map[string]string, comps map[string]repository.Competition,
+	scored []scoredPred, finished finishedSet, comps map[string]repository.Competition,
+	benchByMatch map[string][]repository.BenchmarkPrediction,
 ) []*model.CompetitionMetric {
-	byComp := map[string][]evaluation.Prediction{}
+	modelBy := map[string][]evaluation.Prediction{}
+	marketBy := map[string][]evaluation.Prediction{}
 	for _, s := range scored {
-		if cid, ok := compByMatch[s.row.MatchID]; ok {
-			byComp[cid] = append(byComp[cid], s.pred)
+		cid, ok := finished.competition[s.row.MatchID]
+		if !ok {
+			continue
+		}
+		modelBy[cid] = append(modelBy[cid], s.pred)
+		if b, ok := preMatchMarket(benchByMatch[s.row.MatchID]); ok {
+			marketBy[cid] = append(marketBy[cid], evaluation.Prediction{
+				PHome: b.PHome, PDraw: b.PDraw, PAway: b.PAway, Actual: s.pred.Actual,
+			})
 		}
 	}
-	out := make([]*model.CompetitionMetric, 0, len(byComp))
-	for cid, ps := range byComp {
+	out := make([]*model.CompetitionMetric, 0, len(modelBy))
+	for cid, ps := range modelBy {
 		comp, ok := comps[cid]
 		if !ok {
 			continue
 		}
 		sum, _ := evaluation.Compute(ps)
-		out = append(out, &model.CompetitionMetric{
+		m := &model.CompetitionMetric{
 			Competition: toCompetitionModel(comp),
 			BrierScore:  sum.BrierScore,
 			LogLoss:     sum.LogLoss,
+			Accuracy:    sum.Accuracy,
 			SampleSize:  sum.SampleSize,
-		})
+		}
+		if mk := marketBy[cid]; len(mk) > 0 {
+			ms, _ := evaluation.Compute(mk)
+			m.MarketBrierScore, m.MarketLogLoss = &ms.BrierScore, &ms.LogLoss
+		}
+		out = append(out, m)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Competition.Name < out[j].Competition.Name })
 	return out
+}
+
+// preMatchMarket picks a match's pre-match market-odds benchmark.
+func preMatchMarket(bs []repository.BenchmarkPrediction) (repository.BenchmarkPrediction, bool) {
+	for _, b := range bs {
+		if b.SourceType == "MARKET_ODDS" && b.Horizon == "PRE_MATCH" {
+			return b, true
+		}
+	}
+	return repository.BenchmarkPrediction{}, false
 }
 
 // computeBenchmarkGroups scores benchmark forecasts grouped by

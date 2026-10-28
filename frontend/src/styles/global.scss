@@ -140,6 +140,17 @@
   &__sep { opacity: 0.4; }
 }
 
+// Custom Recharts tooltip.
+.chart-tooltip {
+  display: grid;
+  gap: 2px;
+  padding: $space-2 $space-3;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
+  background: $color-bg-raised;
+  font-size: $fs-xs;
+}
+
 // Small utilities.
 .section-gap { margin-top: $space-6; }
 .muted { color: $color-text-muted; }
@@ -530,6 +541,9 @@
   &--2up {
     @include at-least($bp-md) { grid-template-columns: 2fr 1fr; }
   }
+  &--even {
+    @include at-least($bp-md) { grid-template-columns: 1fr 1fr; }
+  }
 }
 
 // Metric tile
@@ -685,6 +699,13 @@
   h1 {
     font-size: $fs-3xl;
     letter-spacing: -0.02em;
+  }
+  .page-header__intro {
+    max-width: 760px;
+    margin: $space-2 0 0;
+    font-size: $fs-sm;
+    line-height: 1.5;
+    color: $color-text-secondary;
   }
   .page-header__eyebrow {
     font-size: $fs-xs;

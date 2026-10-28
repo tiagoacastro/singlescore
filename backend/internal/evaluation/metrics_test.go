@@ -101,29 +101,36 @@ func TestCompute_SkipsInvalid(t *testing.T) {
 }
 
 func TestCalibration_Buckets(t *testing.T) {
-	// Perfect calibration: when we predict ~0.9 for a class and the class
-	// occurs 100% of the time in that bin, observed frequency should be 1.
+	// Every outcome probability is binned: three predictions give nine
+	// (probability, happened?) pairs.
 	preds := []Prediction{
-		{PHome: 0.9, PDraw: 0.05, PAway: 0.05, Actual: OutcomeHome},
 		{PHome: 0.9, PDraw: 0.05, PAway: 0.05, Actual: OutcomeHome},
 		{PHome: 0.9, PDraw: 0.05, PAway: 0.05, Actual: OutcomeHome},
 		{PHome: 0.1, PDraw: 0.1, PAway: 0.8, Actual: OutcomeAway},
 	}
 	bins := Calibration(preds, 10)
-	// Bin index 9 covers [0.9, 1.0]; both the three home preds (prob of
-	// actual = 0.9) and the away pred (prob of actual = 0.8) fall into
-	// bin 8 or 9 respectively.
-	// Expect the 0.9-bin to have sampleSize 3 (home) and observed freq 1.
-	b9 := bins[9]
-	if b9.SampleSize != 3 {
-		t.Fatalf("bin[9].SampleSize = %d want 3", b9.SampleSize)
+	total := 0
+	for _, b := range bins {
+		total += b.SampleSize
 	}
-	if !approx(b9.ObservedFrequency, 1.0, 1e-9) {
-		t.Fatalf("bin[9].ObservedFrequency = %v want 1", b9.ObservedFrequency)
+	if total != 9 {
+		t.Fatalf("total samples = %d want 9", total)
 	}
-	b8 := bins[8]
-	if b8.SampleSize != 1 {
-		t.Fatalf("bin[8].SampleSize = %d want 1", b8.SampleSize)
+	// [0.9, 1.0): the two 0.9 home forecasts, both came true.
+	if b := bins[9]; b.SampleSize != 2 || !approx(b.ObservedFrequency, 1, 1e-9) || !approx(b.AvgPredicted, 0.9, 1e-9) {
+		t.Fatalf("bin[9] = %+v", b)
+	}
+	// [0.8, 0.9): the away forecast, came true.
+	if b := bins[8]; b.SampleSize != 1 || !approx(b.ObservedFrequency, 1, 1e-9) {
+		t.Fatalf("bin[8] = %+v", b)
+	}
+	// [0.0, 0.1): four 0.05 forecasts (draw, away x2) — none happened.
+	if b := bins[0]; b.SampleSize != 4 || b.ObservedFrequency != 0 {
+		t.Fatalf("bin[0] = %+v", b)
+	}
+	// [0.1, 0.2): home 0.1 and draw 0.1 of the third match, neither happened.
+	if b := bins[1]; b.SampleSize != 2 || b.ObservedFrequency != 0 {
+		t.Fatalf("bin[1] = %+v", b)
 	}
 }
 

@@ -202,7 +202,11 @@ type CompetitionMetric {
   competition: Competition!
   brierScore: Float!
   logLoss: Float!
+  accuracy: Float!
   sampleSize: Int!
+  """Market (pre-match odds) scores on the same matches; null without odds."""
+  marketBrierScore: Float
+  marketLogLoss: Float
 }
 
 type BenchmarkEvaluationSummary {

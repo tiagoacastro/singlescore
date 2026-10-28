@@ -75,10 +75,13 @@ type ComplexityRoot struct {
 	}
 
 	CompetitionMetric struct {
-		BrierScore  func(childComplexity int) int
-		Competition func(childComplexity int) int
-		LogLoss     func(childComplexity int) int
-		SampleSize  func(childComplexity int) int
+		Accuracy         func(childComplexity int) int
+		BrierScore       func(childComplexity int) int
+		Competition      func(childComplexity int) int
+		LogLoss          func(childComplexity int) int
+		MarketBrierScore func(childComplexity int) int
+		MarketLogLoss    func(childComplexity int) int
+		SampleSize       func(childComplexity int) int
 	}
 
 	Dashboard struct {
@@ -432,6 +435,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Competition.Season(childComplexity), true
 
+	case "CompetitionMetric.accuracy":
+		if e.ComplexityRoot.CompetitionMetric.Accuracy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CompetitionMetric.Accuracy(childComplexity), true
 	case "CompetitionMetric.brierScore":
 		if e.ComplexityRoot.CompetitionMetric.BrierScore == nil {
 			break
@@ -450,6 +459,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CompetitionMetric.LogLoss(childComplexity), true
+	case "CompetitionMetric.marketBrierScore":
+		if e.ComplexityRoot.CompetitionMetric.MarketBrierScore == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CompetitionMetric.MarketBrierScore(childComplexity), true
+	case "CompetitionMetric.marketLogLoss":
+		if e.ComplexityRoot.CompetitionMetric.MarketLogLoss == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CompetitionMetric.MarketLogLoss(childComplexity), true
 	case "CompetitionMetric.sampleSize":
 		if e.ComplexityRoot.CompetitionMetric.SampleSize == nil {
 			break
@@ -1327,8 +1348,14 @@ func (ec *executionContext) childFields_CompetitionMetric(ctx context.Context, f
 		return ec.fieldContext_CompetitionMetric_brierScore(ctx, field)
 	case "logLoss":
 		return ec.fieldContext_CompetitionMetric_logLoss(ctx, field)
+	case "accuracy":
+		return ec.fieldContext_CompetitionMetric_accuracy(ctx, field)
 	case "sampleSize":
 		return ec.fieldContext_CompetitionMetric_sampleSize(ctx, field)
+	case "marketBrierScore":
+		return ec.fieldContext_CompetitionMetric_marketBrierScore(ctx, field)
+	case "marketLogLoss":
+		return ec.fieldContext_CompetitionMetric_marketLogLoss(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type CompetitionMetric", field.Name)
 }
@@ -2595,6 +2622,29 @@ func (ec *executionContext) fieldContext_CompetitionMetric_logLoss(_ context.Con
 	return graphql.NewScalarFieldContext("CompetitionMetric", field, false, false, "Float")
 }
 
+func (ec *executionContext) _CompetitionMetric_accuracy(ctx context.Context, field graphql.CollectedField, obj *model.CompetitionMetric) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CompetitionMetric_accuracy(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Accuracy, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CompetitionMetric_accuracy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CompetitionMetric", field, false, false, "Float")
+}
+
 func (ec *executionContext) _CompetitionMetric_sampleSize(ctx context.Context, field graphql.CollectedField, obj *model.CompetitionMetric) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -2616,6 +2666,52 @@ func (ec *executionContext) _CompetitionMetric_sampleSize(ctx context.Context, f
 }
 func (ec *executionContext) fieldContext_CompetitionMetric_sampleSize(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("CompetitionMetric", field, false, false, "Int")
+}
+
+func (ec *executionContext) _CompetitionMetric_marketBrierScore(ctx context.Context, field graphql.CollectedField, obj *model.CompetitionMetric) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CompetitionMetric_marketBrierScore(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MarketBrierScore, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *float64) graphql.Marshaler {
+			return ec.marshalOFloat2ᚖfloat64(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CompetitionMetric_marketBrierScore(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CompetitionMetric", field, false, false, "Float")
+}
+
+func (ec *executionContext) _CompetitionMetric_marketLogLoss(ctx context.Context, field graphql.CollectedField, obj *model.CompetitionMetric) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CompetitionMetric_marketLogLoss(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MarketLogLoss, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *float64) graphql.Marshaler {
+			return ec.marshalOFloat2ᚖfloat64(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CompetitionMetric_marketLogLoss(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CompetitionMetric", field, false, false, "Float")
 }
 
 func (ec *executionContext) _Dashboard_recentFinishedMatches(ctx context.Context, field graphql.CollectedField, obj *model.Dashboard) (ret graphql.Marshaler) {
@@ -6875,9 +6971,24 @@ func (ec *executionContext) _CompetitionMetric(ctx context.Context, sel ast.Sele
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "accuracy":
+			out.Values[i] = ec._CompetitionMetric_accuracy(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "sampleSize":
 			out.Values[i] = ec._CompetitionMetric_sampleSize(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "marketBrierScore":
+			out.Values[i] = ec._CompetitionMetric_marketBrierScore(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "marketLogLoss":
+			out.Values[i] = ec._CompetitionMetric_marketLogLoss(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
 		default:

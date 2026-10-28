@@ -184,10 +184,13 @@ export const MODEL_EVALUATION_QUERY = gql`
       }
       byMinuteBucket { minuteBucket brierScore logLoss sampleSize }
       byCompetition {
-        competition { id name }
+        competition { id name country }
         brierScore
         logLoss
+        accuracy
         sampleSize
+        marketBrierScore
+        marketLogLoss
       }
       benchmarks {
         provider

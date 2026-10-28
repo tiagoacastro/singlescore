@@ -52,7 +52,11 @@ type CompetitionMetric struct {
 	Competition *Competition `json:"competition"`
 	BrierScore  float64      `json:"brierScore"`
 	LogLoss     float64      `json:"logLoss"`
+	Accuracy    float64      `json:"accuracy"`
 	SampleSize  int          `json:"sampleSize"`
+	// Market (pre-match odds) scores on the same matches; null without odds.
+	MarketBrierScore *float64 `json:"marketBrierScore,omitempty"`
+	MarketLogLoss    *float64 `json:"marketLogLoss,omitempty"`
 }
 
 type Dashboard struct {

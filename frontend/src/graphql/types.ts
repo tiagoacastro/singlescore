@@ -164,7 +164,15 @@ export interface EvaluationReport {
   summary?: EvaluationSummary | null;
   calibration: CalibrationBin[];
   byMinuteBucket: { minuteBucket: string; brierScore: number; logLoss: number; sampleSize: number }[];
-  byCompetition: { competition: Competition; brierScore: number; logLoss: number; sampleSize: number }[];
+  byCompetition: {
+    competition: Competition;
+    brierScore: number;
+    logLoss: number;
+    accuracy: number;
+    sampleSize: number;
+    marketBrierScore?: number | null;
+    marketLogLoss?: number | null;
+  }[];
   benchmarks: {
     provider: string;
     horizon: BenchmarkHorizon;
