@@ -25,10 +25,11 @@
 // This is explicitly NOT a trained model — it's a transparent, testable
 // baseline with sensible calibration at the endpoints.
 //
-// The server doesn't call it: stored predictions are written by the
-// Python port in scripts/ingest_season.py. This package is the reference
-// implementation, and TestBaseline_MatchesPythonPort keeps the two in
-// step.
+// The server doesn't call it: stored predictions are written by
+// scripts/ingest_season.py, whose `predict` mirrors this v0.2.0 model
+// (TestBaseline_MatchesPythonPort keeps the two in step). The stored
+// v0.3.0 forecasts reuse this Poisson race and add stoppage time, a
+// two-sided red-card effect and better Elo inputs.
 package prediction
 
 import "math"

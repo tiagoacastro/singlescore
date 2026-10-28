@@ -12,8 +12,11 @@ Design:
   * Zero paid APIs. Zero scraping. One HTTPS GET per league per run.
   * Fully idempotent: deterministic SHA-1-derived UUIDs on every row,
     `INSERT ... ON DUPLICATE KEY UPDATE` on every upsert.
-  * Mirrors the Go `elo-poisson@v0.2.0` predictor in
-    backend/internal/prediction/baseline.go.
+  * Model `elo-poisson@v0.3.0` (`predict_v3`): the Poisson race of the Go
+    reference (v0.2.0, `predict`, backend/internal/prediction) plus
+    stoppage time and a two-sided red-card effect. Elo ratings are seeded
+    from the previous two seasons and updated on goals + shot quality;
+    scripts/backtest_model.py measures each change.
   * Elo ratings are walked chronologically per league (each league is a
     closed pool of teams).
   * Per completed match it writes:
@@ -50,9 +53,14 @@ from ingest_common import (
 # Config.
 # ---------------------------------------------------------------------------
 
-CSV_BASE_URL = environ.get(
-    "FD_CSV_BASE_URL", f"https://www.football-data.co.uk/mmz4281/{SEASON_CODE}"
-)
+CSV_BASE_URL = environ.get("FD_CSV_BASE_URL", "https://www.football-data.co.uk/mmz4281")
+
+# Seasons walked before the current one so Elo doesn't restart at 1500
+# for everyone (oldest first). Between seasons each rating keeps
+# SEASON_CARRYOVER of its distance from the league mean, and promoted
+# clubs start at the average of the clubs they replaced.
+PREVIOUS_SEASON_CODES = ("2425", "2526")
+SEASON_CARRYOVER = 0.8
 PROVIDER = "football-data-couk"
 JOB_NAME = "notebook-season"
 
@@ -60,7 +68,7 @@ JOB_NAME = "notebook-season"
 # the parity tests on both sides (TestBaseline_MatchesPythonPort and
 # scripts/test_ingest.py) pin the same golden values.
 MODEL_NAME = "elo-poisson"
-MODEL_VERSION = "v0.2.0"
+MODEL_VERSION = "v0.3.0"  # predict_v3; v0.2.0 (predict) is the Go baseline
 
 AVG_GOALS_PER_TEAM = 1.35
 ELO_HALF_LIFE = 800.0  # goal-rate ratio is exp(elo_gap / this)
@@ -89,33 +97,19 @@ def _poisson_pmf_vec(mu: float) -> list[float]:
     return [e_neg * mu**k / _FACT[k] for k in range(MAX_EXTRA_GOALS + 1)]
 
 
-def predict(
-    home_elo: float, away_elo: float, home_score: int, away_score: int,
-    minute: int, home_red: int = 0, away_red: int = 0,
-) -> tuple[float, float, float]:
-    """Python port of Go `prediction.Baseline.Predict`: a Poisson race
-    over the remaining minutes, with Elo-driven scoring rates and a
-    penalty for the side with more red cards."""
-    gap = (home_elo + HOME_ADVANTAGE - away_elo) / ELO_HALF_LIFE
-    lh = AVG_GOALS_PER_TEAM * math.exp(+gap / 2)
-    la = AVG_GOALS_PER_TEAM * math.exp(-gap / 2)
-    imb = home_red - away_red
-    if imb > 0:
-        lh *= RED_CARD_FACTOR**imb
-    elif imb < 0:
-        la *= RED_CARD_FACTOR ** (-imb)
-    remaining = (90 - max(0, min(90, minute))) / 90.0
-    p_h = _poisson_pmf_vec(lh * remaining)
-    p_a = _poisson_pmf_vec(la * remaining)
-    margin_now = home_score - away_score
+def poisson_race(mu_home: float, mu_away: float, margin: int) -> tuple[float, float, float]:
+    """Outcome probabilities when each side still expects `mu` goals and
+    home currently leads by `margin` (independent Poissons)."""
+    p_h = _poisson_pmf_vec(mu_home)
+    p_a = _poisson_pmf_vec(mu_away)
     p_home = p_draw = p_away = 0.0
     for h in range(MAX_EXTRA_GOALS + 1):
         for a in range(MAX_EXTRA_GOALS + 1):
             p = p_h[h] * p_a[a]
-            margin = margin_now + h - a
-            if margin > 0:
+            final = margin + h - a
+            if final > 0:
                 p_home += p
-            elif margin < 0:
+            elif final < 0:
                 p_away += p
             else:
                 p_draw += p
@@ -125,18 +119,109 @@ def predict(
     return (p_home / s, p_draw / s, p_away / s)
 
 
+def elo_goal_rates(home_elo: float, away_elo: float) -> tuple[float, float]:
+    """Full-match expected goals per side from the Elo gap."""
+    gap = (home_elo + HOME_ADVANTAGE - away_elo) / ELO_HALF_LIFE
+    return AVG_GOALS_PER_TEAM * math.exp(+gap / 2), AVG_GOALS_PER_TEAM * math.exp(-gap / 2)
+
+
+def predict(
+    home_elo: float, away_elo: float, home_score: int, away_score: int,
+    minute: int, home_red: int = 0, away_red: int = 0,
+) -> tuple[float, float, float]:
+    """v0.2.0, the Python port of Go `prediction.Baseline.Predict`: a
+    Poisson race over the remaining fraction of 90 minutes, with
+    Elo-driven scoring rates and a penalty for the side with more red
+    cards. Kept as the baseline the v0.3.0 backtest compares against."""
+    lh, la = elo_goal_rates(home_elo, away_elo)
+    imb = home_red - away_red
+    if imb > 0:
+        lh *= RED_CARD_FACTOR**imb
+    elif imb < 0:
+        la *= RED_CARD_FACTOR ** (-imb)
+    remaining = (90 - max(0, min(90, minute))) / 90.0
+    return poisson_race(lh * remaining, la * remaining, home_score - away_score)
+
+
+# ---------------------------------------------------------------------------
+# v0.3.0: in-play information beyond the scoreline.
+# ---------------------------------------------------------------------------
+
+# Average stoppage time actually played (2026/27 commentary: 3.4 and 5.9
+# minutes); a match is ~99 minutes, not 90.
+EXPECTED_ADDED_1H = 3.5
+EXPECTED_ADDED_2H = 6.0
+MATCH_MINUTES = 90 + EXPECTED_ADDED_1H + EXPECTED_ADDED_2H
+
+# Red cards: the carded side's scoring rate drops (RED_CARD_FACTOR) and
+# the opponent's rises, per extra red card.
+RED_CARD_OPPONENT = 1.3
+
+
+def minutes_remaining(minute: int) -> float:
+    """Expected playing time left after base `minute` (45 = half-time,
+    stoppage time included)."""
+    if minute <= 0:
+        return MATCH_MINUTES
+    if minute < 45:
+        return (45 - minute) + EXPECTED_ADDED_1H + 45 + EXPECTED_ADDED_2H
+    if minute < 90:
+        return (90 - minute) + EXPECTED_ADDED_2H
+    return 0.0
+
+
+def predict_v3(
+    home_elo: float, away_elo: float, home_score: int, away_score: int,
+    minute: int, home_red: int = 0, away_red: int = 0,
+) -> tuple[float, float, float]:
+    """v0.3.0: the v0.2.0 Poisson race with stoppage time counted in the
+    remaining time, and red cards that also lift the opponent's rate.
+    (Its Elo ratings are seeded from previous seasons and updated on goals
+    + shot quality; see seed_ratings / match_performance.)"""
+    rate_h, rate_a = elo_goal_rates(home_elo, away_elo)
+    imb = home_red - away_red
+    if imb > 0:
+        rate_h *= RED_CARD_FACTOR**imb
+        rate_a *= RED_CARD_OPPONENT**imb
+    elif imb < 0:
+        rate_a *= RED_CARD_FACTOR ** (-imb)
+        rate_h *= RED_CARD_OPPONENT ** (-imb)
+    share = minutes_remaining(minute) / MATCH_MINUTES
+    return poisson_race(rate_h * share, rate_a * share, home_score - away_score)
+
+
+# Elo updates score each match on a blend of goals and shot quality
+# (goals alone are noisy): shots on target are worth ~0.3 goals, other
+# shots ~0.05. The backtest found a 50/50 blend best for pre-match
+# accuracy.
+PERFORMANCE_GOAL_WEIGHT = 0.5
+SOT_GOAL_VALUE = 0.3
+OTHER_SHOT_GOAL_VALUE = 0.05
+
+
+def match_performance(row: pd.Series) -> tuple[float, float]:
+    """(home, away) performance in goals: the blend above, or plain goals
+    when the CSV has no shot columns."""
+    hg, ag = float(row["FTHG"]), float(row["FTAG"])
+    shots = [_int_or_none(row.get(c)) for c in ("HS", "HST", "AS", "AST")]
+    if any(v is None for v in shots):
+        return hg, ag
+    hs, hst, as_, ast = shots
+    hp = SOT_GOAL_VALUE * hst + OTHER_SHOT_GOAL_VALUE * max(hs - hst, 0)
+    ap = SOT_GOAL_VALUE * ast + OTHER_SHOT_GOAL_VALUE * max(as_ - ast, 0)
+    w = PERFORMANCE_GOAL_WEIGHT
+    return w * hg + (1 - w) * hp, w * ag + (1 - w) * ap
+
+
 def _elo_update(
-    home_elo: float, away_elo: float, home_goals: int, away_goals: int,
+    home_elo: float, away_elo: float, home_perf: float, away_perf: float,
 ) -> tuple[float, float]:
-    """ClubElo-style update with a goal-difference multiplier."""
+    """ClubElo-style update with a margin multiplier. A performance
+    margin within a quarter of a goal counts as a draw."""
     expected_home = 1.0 / (1.0 + 10 ** ((away_elo - home_elo - HOME_ADVANTAGE) / 400.0))
-    if home_goals > away_goals:
-        result_home = 1.0
-    elif home_goals < away_goals:
-        result_home = 0.0
-    else:
-        result_home = 0.5
-    k = ELO_K * (1 + math.log(abs(home_goals - away_goals) + 1))
+    margin = home_perf - away_perf
+    result_home = 1.0 if margin > 0.25 else 0.0 if margin < -0.25 else 0.5
+    k = ELO_K * (1 + math.log(abs(margin) + 1))
     delta = k * (result_home - expected_home)
     return home_elo + delta, away_elo - delta
 
@@ -146,8 +231,8 @@ def _elo_update(
 # ---------------------------------------------------------------------------
 
 
-def fetch_csv(league: League) -> pd.DataFrame:
-    url = f"{CSV_BASE_URL}/{league.code}.csv"
+def fetch_csv(league: League, season_code: str = SEASON_CODE) -> pd.DataFrame:
+    url = f"{CSV_BASE_URL}/{season_code}/{league.code}.csv"
     print(f"[fetch] {league.code} GET {url}")
     r = requests.get(url, timeout=30, allow_redirects=True)
     r.raise_for_status()
@@ -167,6 +252,45 @@ def fetch_csv(league: League) -> pd.DataFrame:
     df = df.dropna(subset=["KickoffAt"]).sort_values("KickoffAt").reset_index(drop=True)
     print(f"[fetch] {league.code} {len(df)} rows, {int(df['FTHG'].notna().sum())} played")
     return df
+
+
+def season_start_ratings(previous: dict[str, float], teams: set[str]) -> dict[str, float]:
+    """Opening ratings for `teams` from last season's closing ones."""
+    if not previous:
+        return {t: INITIAL_ELO for t in teams}
+    mean = sum(previous.values()) / len(previous)
+    departed = [r for t, r in previous.items() if t not in teams]
+    promoted = sum(departed) / len(departed) if departed else mean
+    return {
+        t: mean + (previous[t] - mean) * SEASON_CARRYOVER if t in previous else promoted
+        for t in teams
+    }
+
+
+def walk_elo(df: pd.DataFrame, ratings: dict[str, float]) -> dict[str, float]:
+    """Ratings after every played match in `df` (chronological)."""
+    ratings = dict(ratings)
+    for _, row in df.iterrows():
+        if pd.isna(row.get("FTHG")) or pd.isna(row.get("FTAG")):
+            continue
+        h, a = row["HomeTeam"], row["AwayTeam"]
+        ratings[h], ratings[a] = _elo_update(ratings[h], ratings[a], *match_performance(row))
+    return ratings
+
+
+def seed_ratings(league: League, teams: set[str]) -> dict[str, float]:
+    """Opening ratings for the current season, from the previous seasons'
+    results. Falls back to INITIAL_ELO for everyone if they can't be
+    fetched."""
+    ratings: dict[str, float] = {}
+    try:
+        for code in PREVIOUS_SEASON_CODES:
+            df = fetch_csv(league, code)
+            ratings = walk_elo(df, season_start_ratings(ratings, set(df["HomeTeam"]) | set(df["AwayTeam"])))
+    except (requests.RequestException, ValueError, KeyError) as e:
+        print(f"[seed] {league.code} previous seasons unavailable ({e}); starting at {INITIAL_ELO}")
+        ratings = {}
+    return season_start_ratings(ratings, teams)
 
 
 # ---------------------------------------------------------------------------
@@ -256,7 +380,7 @@ def _make_prediction_rows(
 
     def add(minute: int, origin: str, forecast_at: datetime,
             hs: int, as_: int, hr: int = 0, ar: int = 0) -> None:
-        p_h, p_d, p_a = predict(home_elo, away_elo, hs, as_, minute, hr, ar)
+        p_h, p_d, p_a = predict_v3(home_elo, away_elo, hs, as_, minute, hr, ar)
         features = {
             "home_elo": home_elo, "away_elo": away_elo, "minute": minute,
             "home_score": hs, "away_score": as_, "home_red": hr, "away_red": ar,
@@ -404,7 +528,7 @@ def build_rows(
 
     team_names = sorted(set(df["HomeTeam"]) | set(df["AwayTeam"]))
     team_id = {name: det_id("team", f"{PROVIDER}|{name}") for name in team_names}
-    elo = {name: INITIAL_ELO for name in team_names}
+    elo = seed_ratings(league, set(team_names))
     ctx = Context(
         comp_row=(comp_id, PROVIDER, league.competition_external_id,
                   league.name, league.country, SEASON),
@@ -449,7 +573,7 @@ def build_rows(
             stats = _make_stats_row(row, match_id)
             if stats is not None:
                 ctx.stats_rows.append(stats)
-            elo[home], elo[away] = _elo_update(home_elo, away_elo, hs_ft, as_ft)
+            elo[home], elo[away] = _elo_update(home_elo, away_elo, *match_performance(row))
 
     # Teams carry the season-to-date Elo so the UI shows current strength.
     ctx.team_rows = [
@@ -567,6 +691,13 @@ def main() -> int:
                               IN ('goal-event', 'red-card-event')""",
                     (MODEL_NAME, MODEL_VERSION, *chunk),
                 )
+            # Snapshots from other versions of this model would be mixed
+            # into the charts and the evaluation; they're derived data,
+            # so the current version replaces them.
+            cur.execute(
+                "DELETE FROM model_predictions WHERE model_name = %s AND model_version <> %s",
+                (MODEL_NAME, MODEL_VERSION),
+            )
             written = sum((
                 upsert_many(cur, "competitions", COMP_COLS, COMP_UPDATE,
                             [ctx.comp_row for ctx in contexts]),

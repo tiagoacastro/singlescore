@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import re
 import sys
+from os import environ
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -63,7 +64,7 @@ JOB_NAME = "espn-events"
 # Only re-fetch matches that kicked off within this many days (plus any
 # match with no events yet). ESPN's data is effectively immutable once a
 # match is final.
-BACKFILL_LOOKBACK_DAYS = 7
+BACKFILL_LOOKBACK_DAYS = int(environ.get("ESPN_LOOKBACK_DAYS", "7"))
 
 # ESPN team displayName -> football-data.co.uk name (the name the season
 # ingest hashes into team/match ids), per league code.
@@ -398,7 +399,7 @@ def build_commentary_rows(match: DBMatch, summary: dict) -> list[tuple]:
         kind = classify_commentary(text)
         rows.append((
             match.id, int(c.get("sequence", i)), minute if minute > 0 else None, added,
-            (c.get("period") or {}).get("number"), kind,
+            ((c.get("play") or {}).get("period") or {}).get("number"), kind,
             _commentary_side(text, kind, aliases), text, PROVIDER,
         ))
     return rows

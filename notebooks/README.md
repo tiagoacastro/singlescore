@@ -44,7 +44,8 @@ are UK local time and are stored as UTC.
 Row counts stay flat on re-runs: every row has a deterministic SHA-1-derived
 UUID and every write is `INSERT ... ON DUPLICATE KEY UPDATE`. A league whose
 CSV fails to download is skipped and the run is recorded as `PARTIAL`.
-About 10 s end-to-end.
+About 20 s end-to-end (it also reads the previous two seasons' CSVs to
+seed the Elo ratings).
 
 ## `events_espn.ipynb` — ESPN per-event data + commentary
 
@@ -53,7 +54,8 @@ and `.../summary?event={id}`), one slug per league (`eng.1`, `esp.1`,
 `ita.1`, `ger.1`, `por.1`). This is scraping of an undocumented endpoint,
 done at the project owner's explicit direction; it is not a licensed
 feed. Requests are 300 ms apart, and each run only fetches matches with
-no events yet or that kicked off in the last 7 days.
+no events yet or that kicked off in the last 7 days (set
+`ESPN_LOOKBACK_DAYS` to re-fetch older ones).
 
 **What it writes:**
 
@@ -98,10 +100,17 @@ Edit `SEASON` / `SEASON_CODE` or `LEAGUES` in `scripts/ingest_common.py`
 (and add the ESPN team-name map for a new league), then regenerate the
 notebooks.
 
-## Keeping the model in sync with the Go reference
+## The model
 
-The predictor constants in `scripts/ingest_season.py`
-(`AVG_GOALS_PER_TEAM`, `ELO_HALF_LIFE`, `RED_CARD_FACTOR`,
-`HOME_ADVANTAGE`, `MAX_EXTRA_GOALS`) and the model identity (`MODEL_NAME`,
-`MODEL_VERSION`) **must** match `backend/internal/prediction/baseline.go`,
-the Go reference implementation. Bump both together.
+`ingest_season.py` writes `elo-poisson v0.3.0` (`predict_v3`): the
+Poisson race of the Go reference (`backend/internal/prediction`, v0.2.0,
+mirrored by `predict`) plus stoppage time and a two-sided red-card effect,
+on Elo ratings seeded from the previous two seasons
+(`PREVIOUS_SEASON_CODES`) and updated on goals + shot quality. A run
+replaces snapshots from other versions of the model.
+
+The shared constants (`AVG_GOALS_PER_TEAM`, `ELO_HALF_LIFE`,
+`RED_CARD_FACTOR`, `HOME_ADVANTAGE`, `MAX_EXTRA_GOALS`) must match the Go
+reference; the parity tests on both sides pin the same golden values.
+Measure any model change with `scripts/backtest_model.py` before
+shipping it.

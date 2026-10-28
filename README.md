@@ -147,16 +147,26 @@ substring), with filters kept in the URL.
 
 ## Model honesty
 
-- Predictions come from an internal, transparent baseline (`elo-poisson
-  v0.2.0`): a Poisson race over the remaining minutes with Elo-driven
-  scoring rates, home advantage and a red-card penalty.
+- Predictions come from an internal, transparent model (`elo-poisson
+  v0.3.0`): a Poisson race over the remaining playing time (stoppage time
+  included) with Elo-driven scoring rates, home advantage, and red cards
+  that lower the carded side's rate and raise the opponent's. Elo ratings
+  are seeded from the previous two seasons and updated on a 50/50 blend
+  of goals and shot quality (shots on target ≈ 0.3 goals).
+- `scripts/backtest_model.py` replays every match and scores each change
+  separately on both halves of the season. Against v0.2.0, v0.3.0 cuts the
+  pre-match Brier score from 0.640 to 0.609 and the all-snapshot Brier
+  from 0.485 to 0.470. Tried and rejected because they didn't improve
+  held-out matches: an in-match xG update of the scoring rates (built from
+  the commentary's shot locations) and game-state effects.
 - Nothing in the UI claims this model beats any benchmark.
 - Every snapshot stores `(forecast_at, match_minute, home_score_at_fc,
   away_score_at_fc, model_version, provenance)` so evaluation is
   leakage-free.
 - Benchmarks are the bookmakers' pre-match 1X2 odds (market average)
-  from the CSV, de-vigged. Over the 2026/27 season so far they beat the
-  model (Brier 0.569 vs 0.640 pre-match).
+  from the CSV, de-vigged. Over the 2026/27 season so far they still beat
+  the model (Brier 0.569 vs 0.609 pre-match). The odds are never used as a
+  model input, so the comparison stays meaningful.
 
 ## Verified vs. pending
 

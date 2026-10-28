@@ -52,6 +52,43 @@ class PredictorTest(unittest.TestCase):
                 self.assertAlmostEqual(got, exp, places=12, msg=args)
 
 
+class ModelV3Test(unittest.TestCase):
+    def test_pre_match_matches_v2(self):
+        # Without in-play information the two versions agree.
+        self.assertEqual(season.predict_v3(1600, 1500, 0, 0, 0), season.predict(1600, 1500, 0, 0, 0))
+
+    def test_stoppage_time_is_counted(self):
+        self.assertEqual(season.minutes_remaining(85), 5 + season.EXPECTED_ADDED_2H)
+        self.assertEqual(season.minutes_remaining(45), 45 + season.EXPECTED_ADDED_2H)
+        self.assertEqual(season.minutes_remaining(90), 0)
+        # A level game at 85' is less settled than the 90-minute clock thought.
+        self.assertLess(season.predict_v3(1500, 1500, 0, 0, 85)[1], season.predict(1500, 1500, 0, 0, 85)[1])
+
+    def test_red_card_also_helps_the_opponent(self):
+        base = season.predict_v3(1500, 1500, 0, 0, 30)
+        carded = season.predict_v3(1500, 1500, 0, 0, 30, home_red=1)
+        self.assertGreater(carded[2], base[2])
+        self.assertGreater(carded[2], season.predict(1500, 1500, 0, 0, 30, home_red=1)[2])
+
+    def test_season_start_ratings(self):
+        prev = {"A": 1600.0, "B": 1500.0, "C": 1400.0}
+        start = season.season_start_ratings(prev, {"A", "B", "D"})
+        mean = 1500.0
+        self.assertAlmostEqual(start["A"], mean + 100 * season.SEASON_CARRYOVER)
+        self.assertAlmostEqual(start["B"], mean)
+        self.assertAlmostEqual(start["D"], 1400.0)  # promoted: the departed club's rating
+        self.assertEqual(season.season_start_ratings({}, {"A"}), {"A": season.INITIAL_ELO})
+
+    def test_match_performance_blends_goals_and_shots(self):
+        import pandas as pd
+        row = pd.Series({"FTHG": 1, "FTAG": 0, "HS": 10, "HST": 4, "AS": 20, "AST": 10})
+        hp, ap = season.match_performance(row)
+        self.assertAlmostEqual(hp, 0.5 * 1 + 0.5 * (0.3 * 4 + 0.05 * 6))
+        self.assertAlmostEqual(ap, 0.5 * 0 + 0.5 * (0.3 * 10 + 0.05 * 10))
+        # No shot columns: plain goals.
+        self.assertEqual(season.match_performance(pd.Series({"FTHG": 2, "FTAG": 1})), (2.0, 1.0))
+
+
 class TimelineTest(unittest.TestCase):
     def test_goals_land_at_their_real_minutes(self):
         t = timeline([E(17, 0, "GOAL", "HOME"), E(21, 0, "GOAL", "HOME")])
@@ -122,6 +159,13 @@ class EspnParsingTest(unittest.TestCase):
         self.assertEqual(espn._commentary_side("Corner, Brighton and Hove Albion. Conceded by Van Dijk.", "CORNER", aliases), "AWAY")
         # Own goals are credited to the side that benefits.
         self.assertEqual(espn._commentary_side("Own Goal by Groß, Brighton and Hove Albion.", "OWN_GOAL", aliases), "HOME")
+
+    def test_commentary_period_comes_from_the_play(self):
+        match = espn.DBMatch("m1", LEAGUES[0], KICKOFF, "Liverpool", "Brighton")
+        summary = {"commentary": [{"sequence": 5, "time": {"displayValue": "5'"},
+                                   "text": "Delay over. They are ready to continue.",
+                                   "play": {"period": {"number": 1}}}]}
+        self.assertEqual(espn.build_commentary_rows(match, summary)[0][4], 1)
 
     def test_every_league_has_a_team_map(self):
         self.assertEqual({league.code for league in LEAGUES}, set(espn.TEAM_NAME_MAPS))
