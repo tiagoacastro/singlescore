@@ -10,6 +10,24 @@ Scope v1: top-flight only — **Primeira Liga** (Portugal), **Premier League**
 (England), **Serie A** (Italy), **La Liga** (Spain), **Bundesliga**
 (Germany). See `docs/data-sources.md`.
 
+## Screenshots
+
+**Overview**: recent finished matches with the pre-match home / draw / away
+call, plus the status of the hourly ingest runs.
+
+![Overview](docs/screenshots/singlescore-dashboard.png)
+
+**Match detail**: Barcelona 1–2 Real Madrid. Score, probability timeline
+rebuilt from the real minutes, "Who's on top" momentum, opportunity map,
+match stats, minute-by-minute events and benchmark comparison.
+
+![Match detail](docs/screenshots/singlescore-match.png)
+
+**Model evaluation**: the model against bookmakers' pre-match odds and plain
+guessing, across all finished matches.
+
+![Model evaluation](docs/screenshots/singlescore-evaluation.png)
+
 ## Stack
 
 - **Database**: SingleStoreDB (MySQL-wire, v10.x). Rowstore for per-match
